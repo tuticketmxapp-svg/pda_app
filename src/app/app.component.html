@@ -1,3 +1,43 @@
 <ion-app>
-  <ion-router-outlet></ion-router-outlet>
+  <ion-split-pane when="(max-width: 100px)" contentId="menu-content">
+    <ion-menu contentId="menu-content" menuId="menu-content" side="start" type="overlay">
+      <ion-header>
+        <ion-toolbar>
+          <ion-buttons slot="start" class="btn-absolute">
+            <ion-button (click)="closeMenu()">
+              <fa-icon icon="angle-double-left"></fa-icon>
+            </ion-button>
+          </ion-buttons>
+
+          <img class="logo-small" src="assets/images/logo.svg" alt="logo">
+        </ion-toolbar>
+      </ion-header>
+      <ion-content class="ion-padding">
+        <div id="menu-container">
+          <ng-container>
+            <div class="item-menu" (click)="logout()">
+              <fa-icon class="ion-margin-end" icon="arrow-circle-right"></fa-icon>
+             Cerrar sesión
+            </div>
+          </ng-container>
+          <ng-container *ngFor="let page of pages">
+            <div class="item-menu" (click)="openPage(page.url)">
+              <fa-icon [icon]="page.icon"></fa-icon>
+              <ion-label>{{ page.title }}</ion-label>
+            </div>
+          </ng-container>
+        </div>
+      </ion-content>
+      <ion-footer>
+        <!-- <ion-button (click)="logout()" expand="full" fill="clear" color="secondary">
+          <fa-icon class="ion-margin-end" icon="arrow-circle-right"></fa-icon>
+          {{ 'usuario.cerrar-sesion'|translate }}
+        </ion-button> -->
+        <ion-label class="versionApp" expand="full" fill="clear" color="secondary">
+        Version
+        </ion-label>
+      </ion-footer>
+    </ion-menu>
+    <ion-router-outlet id="menu-content"></ion-router-outlet>
+  </ion-split-pane>
 </ion-app>

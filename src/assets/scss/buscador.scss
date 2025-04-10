@@ -1,0 +1,201 @@
+.search-box {
+    // &>ion-segment {
+    //     display: flex;
+    //     align-items: center;
+    //     justify-content: space-between;
+    //     --background: none;
+    //     &>ion-segment-button {
+    //         min-width: 38px;
+    //         max-width: 38px;
+    //         min-height: 34px;
+    //         max-height: 34px;
+    //         font-size: 22px;
+    //         line-height: 38px;
+    //         padding: 0;
+    //         --background: var(--ion-color-primary);
+    //         --indicator-color: var(--ion-color-light);
+    //         --background-checked: var(--ion-color-light);
+    //         --color-checked: var(--ion-color-primary);
+    //         --border-color: none;
+    //         --border-radius: 6px;
+    //         &>fa-icon[icon=plane] {
+    //             transform: rotate(-45deg);
+    //         }
+    //     }
+    // }
+}
+
+.hoteles-search {
+    & .search-row {
+        display: flex;
+        justify-content: space-between;
+        &:nth-child(1) {
+            margin-bottom: 10px;
+        }
+    }
+    & .input-destino {
+        border: 1px solid var(--ion-color-light);
+        border-radius: 6px;
+        font-size: 13px;
+        padding: 16px;
+        width: 100%;
+        margin-right: 10px;
+        & .placeholder {
+            color: var(--ion-color-primary);
+        }
+    }
+    & .btn-search-row {
+        width: 22%;
+    }
+    & .btn-search {
+        font-size: 28px;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+    }
+    & .label {
+        font-size: 12px;
+        text-align: center;
+    }
+    & .date {
+        font-size: 11px;
+        &>span {
+            font-size: 25px;
+            font-weight: 600;
+        }
+    }
+    & .rooms {
+        font-weight: 600;
+        font-size: 25px;
+        &>ion-label {
+            &:nth-child(1) {
+                margin-right: 25px;
+            }
+            &>fa-icon {
+                // margin-right: 5px;
+                font-size: 11px;
+            }
+        }
+    }
+
+    & .results-row {
+        display: flex;
+        align-items: flex-start;
+        &:nth-child(1) {
+            margin-bottom: 10px;
+        }
+        &:nth-child(2) {
+            margin-bottom: 15px;
+            justify-content: space-between;
+        }
+        & .icon {
+            width: 38px;
+            height: 34px;
+            font-size: 22px;
+            line-height: 38px;
+            text-align: center;
+            background-color: var(--ion-color-light);
+            color: var(--ion-color-primary);
+            border-radius: 6px;
+            margin-right: 15px;
+            &>fa-icon[icon=plane] {
+                transform: rotate(-45deg);
+            }
+        }
+        & .destino {
+            font-size: 25px;
+            font-weight: bold;
+            color: var(--ion-color-secondary);
+        }
+    }
+}
+
+.room-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-apply {
+    width: 90px;
+    font-weight: bold;
+}
+
+ion-item-divider {
+    --background: none;
+    --color: var(--ion-color-medium);
+    border-bottom: 1px solid var(--ion-color-medium);
+    --padding-start: 10px;
+    ion-label {
+        display: flex;
+        align-items: center;
+        fa-icon {
+            font-size: 28px;
+            margin-right: 10px;
+        }
+    }
+}
+ion-item {
+    border: none;
+    --inner-border-width: 0;
+}
+.filtrosT{
+    font-size: 25px;
+    font-weight: bold;
+    color: var(--ion-color-secondary);
+   
+}
+.fecha{
+    color: var(--ion-color-secondary);
+}
+.selectores{
+    border-style: solid;
+}
+.titulos{
+    color: white;
+}
+.calendario{
+    padding: 10px 20px;
+    box-sizing: border-box;
+    display: inline-block;
+    background-color: transparent!important;
+    width: 100%;
+    .month-packer-item{
+        button{
+            color: rgb(252, 250, 250)!important;
+            white-space: nowrap;
+        };
+    }
+    &  .days {
+        color: rgb(252, 250, 250)!important;
+        
+    }
+    & .is-last-wrap{
+        color: rgb(252, 250, 250)!important;
+    }
+    & button.days-btn:disabled
+    {
+        p{
+            color: rgb(251 244 244 / 50%)!important;
+        }
+    }
+    & button.days-btn
+    {
+        p{
+            color: rgb(251 244 244 / 100%)!important;
+        }
+    }
+   .title{
+       .switch-btn{
+        color: rgb(251 244 244 / 100%)!important;
+       }
+       .forward{
+        color: rgb(251 244 244 / 100%)!important;
+       }
+       .back{
+        color: rgb(251 244 244 / 100%)!important;
+       }
+  
+   }
+}
+

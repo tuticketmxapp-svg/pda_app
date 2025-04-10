@@ -1,0 +1,31 @@
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { IonicModule } from '@ionic/angular';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { ScannerPage } from './scanner.page';
+import { ScannerPageRoutingModule } from './scanner-routing.module';
+import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
+import { HttpClient } from '@angular/common/http';
+import { Broadcaster } from '@awesome-cordova-plugins/broadcaster/ngx';
+import { Storage } from '@ionic/storage';
+import { PipesModule } from 'src/app/pipes/pipes.module';
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+export function HttpLoaderFactory(http: HttpClient) {
+
+}
+
+@NgModule({
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    IonicModule,
+    ScannerPageRoutingModule,
+    FontAwesomeModule,
+    PipesModule,
+
+  ],
+  declarations: [ScannerPage],
+  providers: [Broadcaster]
+})
+export class ScannerPageModule { }

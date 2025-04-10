@@ -1,0 +1,31 @@
+<ion-content >
+  <div class="Aligner-container">
+    <form [formGroup]="loginForm" (ngSubmit)="login(loginForm.value)">
+      <div >
+        <div class="text-center item-logo">
+          <img src="../../assets/images/logo.svg" class="login-logo">
+        </div>
+        <div class="text-center itemform">
+          <ion-input (ionFocus)="showHideLog('in')" (ionBlur)="showHideLog('out')" class="letras" placeholder="Usuario"
+            required formControlName="username" type="text"></ion-input>
+        </div>
+        <br>
+        <div class="text-center itemform">
+          <ion-input (ionFocus)="showHideLog('in')" (ionBlur)="showHideLog('out')" class="letras"
+            placeholder="Contraseña" required formControlName="password" type="password"></ion-input>
+        </div>
+        <br>
+        <ion-button class="boton" type="submit" [disabled]="loadingLogin" expand="full" fill="clear">
+          <ion-label class="textB">
+            <fa-icon icon="user" class="textB"></fa-icon>&nbsp;Iniciar Sesión
+          </ion-label>
+        </ion-button>
+      </div>
+    </form>
+  </div>
+</ion-content>
+<ion-footer>
+  <ion-label class="versionApp" expand="full" fill="clear" color="secondary">
+   Version {{ version }}
+  </ion-label>
+</ion-footer>

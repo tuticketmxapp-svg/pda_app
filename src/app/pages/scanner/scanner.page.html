@@ -1,0 +1,106 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>{{ acceso }}</ion-title>
+    <ion-buttons slot="start">
+      <ion-button (click)="goBack()">
+        <fa-icon icon="angle-double-left"></fa-icon>
+      </ion-button>
+    </ion-buttons>
+    <!-- <ion-buttons slot="end">
+      <ion-button (click)="cameraScan()">
+        <ion-icon name="qr-code-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons> -->
+    <!-- <ion-searchbar showCancelButton="focus"></ion-searchbar> -->
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <h2 class="title-page">{{ title }}</h2>
+  <h4 class="text-center" (click)="actionSheet()">
+    Total tickets : {{ totalTickets | number:''}}<br>
+    <small class="text-danger">Último ticket: {{last_update}}</small>
+
+  </h4>
+  <h4 class="text-center"> Total de escaneados: {{escaneados?.length}}<br>
+    <small class="text-danger">Por éste dispositivo</small>
+  </h4>
+  <ion-segment (ionChange)="segmentChanged($event)"  value="local">
+    <ion-segment-button value="local">
+      <ion-label>Local {{ entered.length}}</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="online">
+      <ion-label>Online {{ lecturaOnline.length}}</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="historial">
+      <ion-label>Historial {{ escaneados.length}}</ion-label>
+    </ion-segment-button>
+  </ion-segment> 
+  <ion-list [inset]="true" *ngIf="list=='local'">
+    <ion-item *ngFor="let e of entered | slice:0:LIMIT1 ; let i = index;">
+      <ion-item-sliding>
+        <ion-item-options side="end">
+          <ion-item-option color="danger" expandable  (click)="deleteItemFromList(e,entered,0)"> Delete </ion-item-option>
+        </ion-item-options>
+        <ion-item>
+          <ion-label (click)="viewTicket(e.ticket_id)">
+            {{ i +1 }}. {{e.ticket_id}}<br />
+            <small>{{e.acceso}} {{e.fecha_lectura | date: 'HH:mm:ss' }}</small>
+          </ion-label>
+          <ion-icon name="checkmark-circle-outline" class="check-icon-success"></ion-icon>
+        </ion-item>
+      </ion-item-sliding>
+    </ion-item>
+    <ion-item (click)="LIMIT1=LIMIT1+50">
+      <ion-label class="text-center">
+        Cargar mas 
+      </ion-label>
+    </ion-item>
+  </ion-list>
+  <ion-list [inset]="true" *ngIf="list=='online'">
+    <ion-item *ngFor="let e of lecturaOnline| slice:0:LIMIT2; let i = index;">
+      <ion-item-sliding>
+        <ion-item-options side="end">
+          <ion-item-option color="danger" expandable  (click)="deleteItemFromList(e,lecturaOnline,2)"> Delete </ion-item-option>
+        </ion-item-options>
+        <ion-item>
+          <ion-label (click)="viewTicket(e.ticket_id)">
+            {{ i +1 }}. {{e.ticket_id}}<br />
+            <small>{{e.acceso}} {{e.fecha_lectura | date: 'HH:mm:ss' }}</small>
+          </ion-label>
+          <ion-icon name="checkmark-circle-outline" class="check-icon-success"></ion-icon>
+        </ion-item>
+      </ion-item-sliding>
+    </ion-item>
+    <ion-item (click)="LIMIT2=LIMIT2+50">
+      <ion-label class="text-center">
+        Cargar mas 
+      </ion-label>
+    </ion-item>
+  </ion-list>
+  <ion-list [inset]="true" *ngIf="list=='historial'">
+    <ion-item *ngFor="let e of escaneados| slice:0:LIMIT3; let i = index;">
+      <ion-item-sliding>
+        <ion-item-options side="end">
+          <ion-item-option color="danger" expandable  (click)="deleteItemFromList(e,escaneados,1)"> Delete </ion-item-option>
+        </ion-item-options>
+        <ion-item>
+          <ion-label (click)="findTicket(e.code)">
+            {{ i +1 }}. {{e.code}}<br />
+            <small>{{e.acceso}} {{e.date | date: 'HH:mm:ss' }}</small>
+          </ion-label>
+        </ion-item>
+      </ion-item-sliding>
+    </ion-item>
+    <ion-item (click)="LIMIT3=LIMIT3+50">
+      <ion-label class="text-center">
+        Cargar mas 
+      </ion-label>
+    </ion-item>
+  </ion-list> 
+  <ion-fab slot="fixed" vertical="bottom" horizontal="center">
+    <ion-fab-button (click)="cameraScan()">
+      <ion-icon name="qr-code-outline"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

@@ -1,0 +1,181 @@
+ion-card.microblog {
+    ion-card-header{
+        background-color: var(--ion-color-light);
+        & .microblog-header {
+            display: flex;
+            // justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            &>:not(:last-child) {
+                margin-right: 8px;
+            }
+        }
+        & .microblog-title{
+            color: var(--color);
+            text-decoration: none;
+            margin: 3px;
+        }
+    }
+ 
+
+}
+.micro{
+    & img{
+        border-style: solid;
+        border-radius: 20px;
+    }
+    & h4{
+        color: var(--ion-color-secondary)!important;
+        font-family: 'Open Sans', sans-serif;
+        font-weight: bold;
+    }
+    .fecha{
+        color: white;
+    }
+}
+a{
+    text-decoration: none;
+}
+.microblog-title{
+    margin: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+}
+.microblog-descrip{
+    white-space: nowrap;
+    margin: 0;
+    color: var(--ion-color-secondary);
+}
+.text-blog{
+    margin-bottom: 0.5rem !important;
+    align-items: flex-start !important;
+}
+.pub-anterior{
+    display: flex;
+    flex-wrap: wrap;
+     color: var(--color);
+}
+
+.pub-sig{
+    display: flex;
+    flex-wrap: wrap;
+    color: var(--color);
+}
+.pubSA{
+  
+    font-size: 1.5rem;
+   
+}
+.infoBlog{
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    text-align: left;
+    margin-top: auto !important;
+   
+    a {
+       
+        text-decoration: none;
+        
+        }
+}
+
+.date-pub {
+    color: #387ad9;
+}
+.textF{
+    margin-top: 0% !important;
+    color: white;
+    text-decoration: none;
+    text-align: center;
+    font-size: 15px!important;
+}
+
+.prev-next{
+    border-style: solid;
+    border-radius: 5px;
+    max-height: 137%;
+    height: 100%;
+    width: 100%;
+}
+:root {
+    /* Not my favorite that line-height has to be united, but needed */
+    --lh: 1.3rem;
+  }
+  
+  .microblog-descripcion {
+    max-width: 22rem;
+    margin: 2rem auto;
+    line-height: var(--lh);
+    color: white;
+  }
+  
+  .truncate-overflow {
+    --max-lines: 2;
+    position: relative;
+    max-height: calc(var(--lh) * var(--max-lines));
+    overflow: hidden;
+    color: var(--ion-color-secondary);
+    & h3{
+        margin-top: 0px;
+    margin-bottom: 0px;
+    font-weight: 500;
+    line-height: 1.2;
+    font-size: 16px;
+    }
+    & p {
+        margin-top: 0px; 
+    }
+  }
+  .truncate-overflow::before {
+    position: absolute;
+    content: "...";
+   top: calc(var(--lh) * (var(--max-lines) - 1)); 
+    bottom: 0;
+    right: 0;
+  }
+  .truncate-overflow::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 0;
+    right: 0;
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .microblog-results {
+    display: flex;
+    background: var( --ion-color-tertiary);
+    overflow: hidden;
+    border-radius: 8px;
+    /* margin-bottom: 10px; */
+    box-shadow: rgb(0 0 0 / 50%) 0px 9px 25px -6px;
+    &.featured {
+        border: 1px solid var(--ion-color-warning);
+        text-align: left;
+    }
+    .card-image {
+    width: 141%;
+    height: 74%;
+    border-radius: 8px;
+    -o-object-fit: cover;
+    object-fit: cover;
+    max-width: 141%;
+        img {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+    }
+    .card-info {
+        width: 50%;
+        margin-left: 3%;
+    }
+ 
+}
+.margin-card{
+    margin-bottom: 20px;
+}

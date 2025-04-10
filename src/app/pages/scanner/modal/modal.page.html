@@ -1,0 +1,50 @@
+<ion-header>
+  <ion-toolbar>
+    <!-- <ion-title></ion-title> -->
+    <ion-buttons slot="end">
+      <ion-button (click)="closeModal()">
+        <ion-icon name="close"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+<ion-content>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-row>
+        <ion-col class="align-items-center text-center">
+          <ion-icon name="checkmark-circle-outline" class="check-icon-success icon-big"
+            *ngIf="showCorrect(item)"></ion-icon>
+          <ion-icon name="close-circle-outline" class="check-icon-error icon-big" *ngIf="!showCorrect(item)"></ion-icon>
+        </ion-col>
+      </ion-row>
+      <ion-card-subtitle color="light" *ngIf="!history">Créditos:</ion-card-subtitle>
+      <ion-card-title color="secondary" *ngIf="!history && item?.checkin<=0">SIN CREDITOS</ion-card-title>
+      <ion-card-subtitle color="light" *ngIf="history">Último acceso:</ion-card-subtitle>
+      <ion-card-title color="secondary" *ngIf="history">{{ history?.fecha_lectura}}</ion-card-title>
+      <ion-card-subtitle color="light" *ngIf="history">{{ history?.username}}</ion-card-subtitle>
+      <ion-card-subtitle color="light">Evento:</ion-card-subtitle>
+      <ion-card-title color="light"><small>{{ item?.evento }} </small></ion-card-title>
+      <ion-card-subtitle color="light">Acceso:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.acceso }} </ion-card-title>
+    </ion-card-header>
+
+    <ion-card-content>
+      <ion-card-subtitle color="light">Orden:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.numeroOrden}}</ion-card-title>
+      <ion-card-subtitle color="light">CÓDIGO:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.ticket_id}}</ion-card-title>
+      <ion-card-subtitle color="light">Zona:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.zona}}</ion-card-title>
+      <ion-card-subtitle color="light">Fila / Asiento:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.fila }} / {{ item?.asiento }}</ion-card-title>
+
+      <ion-card-subtitle color="light">Tipo / Promoción:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.ticket_promocode }} </ion-card-title>
+      <ion-card-subtitle color="light">Creditos:</ion-card-subtitle>
+      <ion-card-title color="light">{{ item?.checkin }} </ion-card-title>
+    </ion-card-content>
+  </ion-card>
+
+</ion-content>

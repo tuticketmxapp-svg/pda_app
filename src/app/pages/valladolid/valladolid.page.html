@@ -1,0 +1,12 @@
+<ion-header>
+    <ion-toolbar>
+        <ion-title>Escanear QR</ion-title>
+    </ion-toolbar>
+</ion-header>
+
+<ion-content>
+    <div *ngFor="let qr of qrCodes">
+        <p>Código: {{ qr.name }} - Escaneos: {{ qr.count }}</p>
+    </div>
+    <ion-button color="danger" (click)="clearStorage()">Limpiar Almacenamiento</ion-button>
+</ion-content>

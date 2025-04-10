@@ -1,20 +1,21 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+  <img class="logo" src="assets/images/logo.svg" alt="logo">
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
-  </div>
+  <ion-card *ngFor="let e of eventos; let i = index"  (click)="selectEntrada(e)">
+  <!-- <ion-card *ngFor="let e of eventos; let i = $index"  [routerLink]="['/scanner/' + e.id]" [queryParams]="{ name : e.name}"> -->
+    <ion-img [src]="e.image_event_online" ></ion-img>
+    <ion-card-header >
+      <ion-card-subtitle color="light">{{e.event_date}} a las {{e.event_time}} |
+        {{e.enclosure_name}}</ion-card-subtitle>
+      <ion-card-title  color="light" class="title">{{e.name}}</ion-card-title>
+    </ion-card-header>
+  </ion-card>
 </ion-content>
