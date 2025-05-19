@@ -10,6 +10,7 @@ import { Broadcaster } from '@awesome-cordova-plugins/broadcaster/ngx';
 import { Storage } from '@ionic/storage';
 import { PipesModule } from 'src/app/pipes/pipes.module';
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+import { IonicStorageModule } from '@ionic/storage-angular';
 export function HttpLoaderFactory(http: HttpClient) {
 
 }
@@ -23,7 +24,7 @@ export function HttpLoaderFactory(http: HttpClient) {
     ScannerPageRoutingModule,
     FontAwesomeModule,
     PipesModule,
-
+    IonicStorageModule.forRoot() // Esto inicializa correctamente el storage
   ],
   declarations: [ScannerPage],
   providers: [Broadcaster]

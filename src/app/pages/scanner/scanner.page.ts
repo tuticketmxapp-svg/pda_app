@@ -22,8 +22,8 @@ interface Ticket {
   ticket_status: number;
   [key: string]: any;
   event_id: any;
-  ticket_id: any;
-  acceso: any;
+  ticket_id: string;
+  acceso: string;
   numeroOrden: any;
   evento_id: string;
   username: any;
@@ -32,13 +32,16 @@ interface Ticket {
   updated_at: string;
   sent: number;
   codeNumericQR: string;
+  checkin: number;
 }
 interface TicketItem {
-  ticket_id: string;
   [key: string]: any;
-  acceso: string;
-  ticket_status: number;
+  ticket_id: string;
+  codeNumericQR: string;
+  acceso: string;       // o el tipo que corresponda
+  numeroOrden: number;
   checkin: number;
+
 }
 
 @Component({
@@ -64,7 +67,7 @@ export class ScannerPage implements OnInit {
   seconds = 5;
   isDownloading = false;
   isDownloadingH = false;
-  user: { username: any; } | undefined;
+  user: { username: any } | undefined | null;
   entered: Ticket[] = [];
   lecturaOnline: Ticket[] = [];
   displayedOnline: any[] = [];
@@ -98,15 +101,20 @@ export class ScannerPage implements OnInit {
       this.key_event_history_online = 'tickets_history_online' + this.event_id;
       this.key_event_tickets = 'tickets_dataset_' + this.event_id;
       this.key_event_entered = 'tickets_entered_' + this.event_id;
+
       this.storage.get(this.key_event_tickets).then((tickets) => {
-        if (tickets == null || tickets == '') {
+
+        if (!Array.isArray(tickets) || tickets.length === 0) {
           this.firstDownload();
         } else {
           this.tickets = tickets;
-          console.log('this.tickets',this.tickets);
           this.setLastUpdate(tickets);
         }
+      }).catch(error => {
+        console.error('Error al obtener tickets desde el storage:', error);
+        this.firstDownload();
       });
+
       this.getEnteder();
       this.getHistorialOffline()
     });
@@ -153,20 +161,46 @@ export class ScannerPage implements OnInit {
 
   async requestPermissions(): Promise<boolean> {
     try {
-      const { camera } = await BarcodeScanner.requestPermissions();
-      return camera === 'granted' || camera === 'limited';
-    } catch (err) {
+      const result = await BarcodeScanner.requestPermissions();
+      const cameraStatus = result?.camera ?? null;
+
+      if (cameraStatus === 'granted' || cameraStatus === 'limited') {
+        return true;
+      } else {
+        console.warn('Permisos de cámara no concedidos:', cameraStatus);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error solicitando permisos de cámara:', error);
       return false;
     }
   }
+
   async presentAlert2(response: any) {
+    // Intentamos mostrar un mensaje más limpio
+    let message = '';
+
+    if (typeof response === 'string') {
+      message = response;
+    } else if (response && typeof response === 'object') {
+      try {
+        message = JSON.stringify(response, null, 2);
+      } catch {
+        message = 'Respuesta no se puede mostrar correctamente';
+      }
+    } else {
+      message = 'Respuesta inesperada';
+    }
+
     const alert = await this.alertController.create({
-      header: 'Response Data',
-      message: JSON.stringify(response, null, 2), // Convierte el objeto a string
+      header: 'Respuesta del servidor',
+      message: `<pre style="white-space: pre-wrap;">${message}</pre>`, // Usa <pre> para mantener formato
       buttons: ['OK']
     });
+
     await alert.present();
   }
+
   async presentAlert(): Promise<void> {
     const alert = await this.alertController.create({
       header: 'Permission denied',
@@ -176,70 +210,107 @@ export class ScannerPage implements OnInit {
     await alert.present();
   }
 
-  async presentErrorAlert(): Promise<void> {
+  async presentErrorAlert(
+    header: string = 'Scan Error',
+    message: string = 'An error occurred while scanning. Please try again.'
+  ): Promise<void> {
     const alert = await this.alertController.create({
-      header: 'Scan Error',
-      message: 'An error occurred while scanning. Please try again.',
-      buttons: ['OK'],
+      header,
+      message,
+      cssClass: 'error-alert', // puedes crear estilos para este alert en global.scss
+      buttons: [
+        {
+          text: 'OK',
+          role: 'cancel',
+          handler: () => {
+            console.log('Alert dismissed');
+          }
+        }
+      ],
     });
     await alert.present();
   }
 
-  async getUser() {
-    this.storage.get('user').then((user) => {
+
+  async getUser(): Promise<void> {
+    try {
+      const user = await this.storage.get('user');
       this.user = user;
-    });
+    } catch (error) {
+      console.error('Error al obtener el usuario del storage', error);
+      this.user = null; // o algún valor por defecto
+    }
   }
-  async viewTicket(ticket_id:any) {
-    console.log('ticket_id en ', JSON.stringify(ticket_id, null, 2));
-   
+
+  async viewTicket(ticket_id: string) {
+
     let idEvento = '';
     let codeTick = '';
+
     const tt = ticket_id.toLowerCase();
     const parts = tt.split('-');
-    if (parts.length !== 2) {
-      codeTick = ticket_id;
-    } else {
+
+    if (parts.length === 2) {
       [idEvento, codeTick] = parts;
+    } else {
+      codeTick = ticket_id;
     }
-    // this.eventoService.getQr(ticket_id).subscribe(response => {
-    //   idEvento = response.eventID;
-    //   codeTick = response.ticket_id;
-    //   this.presentToast('success', response.eventID, response.ticket_id);
-    // }, errors => {
-    //   this.presentToast('danger', errors);
-    // });
 
     const response = this.findOccurrences(this.tickets, codeTick);
-    if (!response || response.length == 0) {
-      this.presentToast('danger', 'Ticket no encontrado viewTicket', 'No válido para éste evento o actualice los últimos tickets');
-    } else {
-      response.forEach(item => {
-        item["view"] = true;
-        this.modalScanner(item);
-      });
+
+    if (!response || response.length === 0) {
+      this.presentToast('danger', 'Ticket no encontrado', 'No válido para éste evento o actualice los últimos tickets');
+      return;
+    }
+
+    // Para evitar abrir muchos modales simultáneamente, esperamos uno a la vez
+    for (const item of response) {
+      item.view = true;
+      await this.modalScanner(item);
     }
   }
+
   async localScaned() {
-    this.storage.get(this.key_event_history).then((eventos) => {
+    try {
+      const eventos = await this.storage.get(this.key_event_history);
       if (eventos) {
         this.escaneados = eventos;
       }
-    });
+    } catch (error) {
+      console.error('Error loading scanned events:', error);
+    }
   }
-  getTotalTickets() {
-    this.storage.get('totalTickets-' + this.event_id).then((totalTickets) => {
-      if (totalTickets) {
+
+  async getTotalTickets() {
+    try {
+      const totalTickets = await this.storage.get('totalTickets-' + this.event_id);
+      if (totalTickets !== undefined && totalTickets !== null) {
         this.totalTickets = totalTickets;
       }
-    });
+    } catch (error) {
+      console.error('Error getting total tickets:', error);
+    }
   }
-  ngOnInit() {
-    BarcodeScanner.isSupported().then((result) => {
+
+  async ngOnInit() {
+    try {
+      const result = await BarcodeScanner.isSupported();
       this.isSupported = result.supported;
-    });
-    this.localScaned();
-    this.getTotalTickets();
+    } catch (error) {
+      console.error('Error checking BarcodeScanner support:', error);
+      this.isSupported = false;
+    }
+
+    await this.localScaned();
+    await this.getTotalTickets();
+    //this.getHistorialQr();
+
+    await this.storage.create(); // ¡Esto es obligatorio!
+    const saved = await this.storage.get(this.key_event_entered);
+    if (saved) {
+      this.entered = saved;
+    }
+
     setInterval(() => {
       if (!this.isDownloading) {
         this.autoUpdate();
@@ -247,18 +318,16 @@ export class ScannerPage implements OnInit {
       if (!this.isDownloadingH) {
         this.getHistorial();
       }
-
     }, this.seconds * 1000);
-    this.getHistorialQr();
   }
+
   maxDate(date1: string, date2: string): string {
-    return date1 > date2 ? date1 : date2;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return d1 > d2 ? date1 : date2;
   }
   setLastUpdateHistory(array: any[] | null) {
-    if (typeof array != "undefined"
-      && array != null
-      && array.length != null
-      && array.length > 0) {
+    if (Array.isArray(array) && array.length > 0) {
       const maxLastUpdate = array.reduce((maxDate, currentObj) => {
         return this.maxDate(currentObj.fecha_lectura, maxDate);
       }, array[0].fecha_lectura);
@@ -267,11 +336,9 @@ export class ScannerPage implements OnInit {
       this.last_history = '';
     }
   }
+
   setLastUpdate(array: any[] | null) {
-    if (typeof array != "undefined"
-      && array != null
-      && array.length != null
-      && array.length > 0) {
+    if (Array.isArray(array) && array.length > 0) {
       const maxLastUpdate = array.reduce((maxDate, currentObj) => {
         return this.maxDate(currentObj.last_update, maxDate);
       }, array[0].last_update);
@@ -280,201 +347,245 @@ export class ScannerPage implements OnInit {
       this.last_update = '';
     }
   }
-  initCounter() {
-    this.storage.remove(this.key_event_history);
-    this.storage.remove(this.key_event_history_online);
-    this.storage.remove(this.key_event_tickets);
-    this.storage.remove(this.key_event_entered);
+
+  async initCounter() {
+    await Promise.all([
+      this.storage.remove(this.key_event_history),
+      this.storage.remove(this.key_event_history_online),
+      this.storage.remove(this.key_event_tickets),
+      this.storage.remove(this.key_event_entered)
+    ]);
     this.entered = [];
     this.lecturaOnline = [];
     this.escaneados = [];
   }
-  async setTotalTickets() {
-    //filter ARRAY of this.tickets  by ticket_status = 1
-    const totalTickets = this.tickets.filter(ticket => ticket.ticket_status === 1).length;
-    this.storage.set('totalTickets-' + this.event_id, totalTickets);
-    console.log('totalTickets',totalTickets);
-    // totalTickets
+
+  async setTotalTickets(): Promise<void> {
+    try {
+      const totalTickets = this.tickets.filter(ticket => ticket.ticket_status === 1).length;
+      await this.storage.set(`totalTickets-${this.event_id}`, totalTickets);
+    } catch (error) {
+      console.error('Error setting totalTickets:', error);
+    }
   }
-  async firstDownload() {
+
+  async firstDownload(): Promise<void> {
     this.initCounter();
+
     const loading = await this.loadingCtrl.create({
       mode: 'ios',
       message: 'Descargando tickets',
     });
-    await loading.present();
-    this.eventoService.getTicekts(this.event_id, '').subscribe(async (tickets) => {
-      console.log('tickets',tickets);
-      await loading.dismiss();
-      this.tickets = tickets;
-      this.storage.set(this.key_event_tickets, tickets);
-      this.setLastUpdate(tickets);
-    }, async error => { await loading.dismiss(); });
-    this.getHistorial();
-    this.setTotalTickets();
-  
 
+    await loading.present();
+
+    this.eventoService.getTicekts(this.event_id, '').subscribe({
+      next: async (tickets) => {
+        this.tickets = tickets;
+        await this.storage.set(this.key_event_tickets, tickets);
+        this.setLastUpdate(tickets);
+        await loading.dismiss();
+        this.setTotalTickets();
+        this.getHistorial();
+      },
+      error: async (error) => {
+        console.error('Error descargando tickets:', error);
+        await loading.dismiss();
+      }
+    });
   }
-  async getHistorialOffline() {
-    this.storage.get(this.key_event_history_online).then((historyOnline) => {
+
+  async getHistorialOffline(): Promise<void> {
+    try {
+      const historyOnline = await this.storage.get(this.key_event_history_online);
       if (historyOnline) {
         this.lecturaOnline = historyOnline;
         this.loadInitialItems();
       }
-    });
+    } catch (error) {
+      console.error('Error obteniendo historial offline:', error);
+    }
   }
-  async getHistorial() {
-    const last_history = this.last_history;
-    this.isDownloadingH = true;
-    this.eventoService.getHistorial(this.event_id, last_history).subscribe(async (tickets) => {
-      this.isDownloadingH = false;
-      if (tickets) {
-        this.storage.get(this.key_event_history_online).then((historyOnline) => {
-          tickets.forEach((item: {
-            codeNumericQR: string; ticket_id: any; event_id: any; username: any; numero_orden: any; fecha_lectura: any; created_at: any; updated_at: any;
-          }) => {
-            let itemd: Ticket = {
-              ticket_id: item.ticket_id,
-              event_id: item.event_id,
-              acceso: "ONLINE",
-              username: item.username,
-              numero_orden: item.numero_orden,
-              fecha_lectura: item.fecha_lectura,
-              created_at: item.created_at,
-              updated_at: item.updated_at,
-              sent: 1,
-              code: '', // Asigna un valor adecuado a 'code'
-              view: false, // Asigna un valor adecuado a 'view'
-              ticket_status: 1, // Asigna un valor adecuado a 'ticket_status'
-              numeroOrden: item.numero_orden, // Asigna un valor adecuado a 'numeroOrden'
-              evento_id: this.event_id, // Asegúrate de que 'evento_id' sea correcto
-              codeNumericQR: item.codeNumericQR
-            };
 
-            const rt = this.lecturaOnline.find((objeto) => objeto.ticket_id === item.ticket_id);
-            if (!rt) {
-              this.lecturaOnline.push(itemd);
+  async getHistorial() {
+    this.isDownloadingH = true;
+    const last_history = this.last_history;
+
+    this.eventoService.getHistorial(this.event_id, last_history).subscribe({
+      next: async (tickets) => {
+        if (tickets && tickets.length) {
+          try {
+            const historyOnline = (await this.storage.get(this.key_event_history_online)) || [];
+
+            for (const item of tickets) {
+              const itemd: Ticket = {
+                ticket_id: item.ticket_id,
+                event_id: item.event_id,
+                acceso: 'ONLINE',
+                username: item.username,
+                numero_orden: item.numero_orden,
+                fecha_lectura: item.fecha_lectura,
+                created_at: item.created_at,
+                updated_at: item.updated_at,
+                sent: 1,
+                code: '',
+                view: false,
+                ticket_status: 1,
+                numeroOrden: item.numero_orden,
+                evento_id: this.event_id,
+                codeNumericQR: item.codeNumericQR,
+                checkin: 0
+              };
+
+              const exists = historyOnline.find((obj: { ticket_id: any; }) => obj.ticket_id === item.ticket_id);
+              if (!exists) {
+                historyOnline.push(itemd);
+              }
             }
-          });
-          this.setLastUpdateHistory(this.lecturaOnline);
-          this.storage.set(this.key_event_history_online, this.lecturaOnline);
-        });
+
+            this.lecturaOnline = historyOnline;
+            this.setLastUpdateHistory(this.lecturaOnline);
+            await this.storage.set(this.key_event_history_online, this.lecturaOnline);
+          } catch (error) {
+            console.error('Error accessing storage:', error);
+          }
+        }
+        this.isDownloadingH = false;
+      },
+      error: (error) => {
+        console.error('Error fetching historial:', error);
+        this.isDownloadingH = false;
       }
-    }, error => {
-      this.isDownloadingH = false;
     });
   }
-  async getHistorialQr(){
-    console.log('entre getHistorialQr');
-    this.eventoService.getHistorialQr(this.event_id).subscribe(async (qr) => {
-      this.isDownloadingH = false;
-      console.log('qr',qr);
-      if (qr) {
-        this.listQrPrev = qr;
-      
+
+  async getHistorialQr() {
+    this.isDownloadingH = true;
+    this.eventoService.getHistorialQr(this.event_id).subscribe({
+      next: async (qr) => {
+        this.isDownloadingH = false;
+        if (qr) {
+          this.listQrPrev = qr;
+        }
+      },
+      error: (error) => {
+        console.error('Error fetching historial QR:', error);
+        this.isDownloadingH = false;
       }
-    }, error => {
-      this.isDownloadingH = false;
     });
   }
+
 
   async autoUpdate() {
-    const last_update = this.last_update;
     this.isDownloading = true;
-    const $params = (last_update != '' && typeof last_update != 'undefined') ? 'date=' + last_update : '';
-    this.eventoService.getTicekts(this.event_id, $params).subscribe(async (tickets) => {
-      this.isDownloading = false;
-      this.storage.get(this.key_event_tickets).then((ticketsSaved) => {
-        if (tickets) {
-          tickets.forEach((item: { ticket_id: any; }) => {
-            const rt = ticketsSaved.find((objeto: { ticket_id: any; }) => objeto.ticket_id === item.ticket_id);
-            if (rt) {
-              const idx = ticketsSaved.indexOf(rt);
-              if (idx !== -1) {
-                ticketsSaved.splice(idx, 1);
-                ticketsSaved.push(item);
-              }
-            } else {
-              ticketsSaved.push(item);
-            }
-          });
-          this.storage.set(this.key_event_tickets, ticketsSaved);
-          this.tickets = ticketsSaved;
-          this.setLastUpdate(tickets);
-          this.setTotalTickets();
+    try {
+      const last_update = this.last_update;
+      const params = (last_update && last_update !== '') ? `date=${last_update}` : '';
+      const tickets: Ticket[] = await this.eventoService.getTicekts(this.event_id, params).toPromise();
+
+      tickets.forEach((item: Ticket) => {
+        if (item.numeroOrden === "149989") {
         }
+
       });
-    }, async error => {
+      if (tickets && tickets.length) {
+        let ticketsSaved = await this.storage.get(this.key_event_tickets) || [];
+
+
+        // Crear un Map para buscar tickets guardados por ticket_id
+        const savedMap = new Map(ticketsSaved.map((t: Ticket) => [t.ticket_id, t]));
+
+        // Actualizar o agregar tickets nuevos
+        tickets.forEach((item: Ticket) => {
+          savedMap.set(item.ticket_id, item);
+        });
+
+        // Convertir Map a array
+        ticketsSaved = Array.from(savedMap.values());
+
+        await this.storage.set(this.key_event_tickets, ticketsSaved);
+        this.tickets = ticketsSaved;
+
+        this.setLastUpdate(tickets);
+        await this.setTotalTickets();
+      }
+    } catch (error) {
+      console.error('Error en autoUpdate:', error);
+    } finally {
       this.isDownloading = false;
-    });
+    }
+
     this.upload();
   }
+
+
   async syncTickets() {
     const loading = await this.loadingCtrl.create({
       mode: 'ios',
       message: 'Descargando tickets',
     });
     await loading.present();
-    const last_update = this.last_update;
+
     this.isDownloading = true;
-    this.eventoService.getTicekts(this.event_id, 'date=' + last_update).subscribe(async (tickets) => {
+    try {
+      const last_update = this.last_update || '';
+      const tickets = await this.eventoService.getTicekts(this.event_id, `date=${last_update}`).toPromise();
+
+      let ticketsSaved = await this.storage.get(this.key_event_tickets) || [];
+
+      // Usamos un Map para actualizar o agregar tickets sin duplicados
+      const savedMap = new Map(ticketsSaved.map((t: { ticket_id: any; }) => [t.ticket_id, t]));
+      tickets.forEach((item: any) => savedMap.set(item.ticket_id, item));
+
+      ticketsSaved = Array.from(savedMap.values());
+
+      await this.storage.set(this.key_event_tickets, ticketsSaved);
+      this.setLastUpdate(tickets);
+
+    } catch (error) {
+      console.error('Error sincronizando tickets:', error);
+    } finally {
       this.isDownloading = false;
       await loading.dismiss();
-      this.storage.get(this.key_event_tickets).then((ticketsSaved) => {
-        tickets.forEach((item: { ticket_id: any; }) => {
-          const rt = ticketsSaved.find((objeto: { ticket_id: any; }) => objeto.ticket_id === item.ticket_id);
-          if (rt) {
-            const idx = ticketsSaved.indexOf(rt);
-            if (idx !== -1) {
-              ticketsSaved.splice(idx, 1);
-              ticketsSaved.push(item);
-            }
-          } else {
-            ticketsSaved.push(item);
-          }
-        });
-        this.storage.set(this.key_event_tickets, ticketsSaved);
-        this.setLastUpdate(tickets);
-      });
-    }, async error => {
-      this.isDownloading = false;
-      await loading.dismiss();
-    });
+    }
   }
+
 
   goBack() {
     this.navCtrl.back();
   }
-  async actionSheet() {
-    let buttons = [];
-    buttons.push({
-      text: "Sincronizar escaneo local",
-      handler: async () => {
-        this.upload();
 
-      }
-    }, {
-      text: "Descargar todo de nuevo",
-      handler: async () => {
-        this.firstDownload();
-      }
-    },
+  async actionSheet() {
+    const buttons = [
+      {
+        text: "Sincronizar escaneo local",
+        handler: async () => {
+          await this.upload();
+        }
+      },
+      {
+        text: "Descargar todo de nuevo",
+        handler: async () => {
+          await this.firstDownload();
+        }
+      },
       {
         text: "Descargar últimos",
         handler: async () => {
-          this.syncTickets();
+          await this.syncTickets();
         }
-      },
-    );
+      }
+    ];
+
     const actionSheet = await this.actionSheetController.create({
       header: 'Seleccione una opción deseada',
       buttons
     });
     await actionSheet.present();
   }
+
   async presentToast(color = "medium", title = "", message = "", item: TicketItem | null = null) {
-    let buttons: any[] = [];
-    buttons = [
+    const buttons: any[] = [
       {
         icon: 'close-outline',
         role: 'cancel',
@@ -482,272 +593,218 @@ export class ScannerPage implements OnInit {
       }
     ];
 
-    if (item) {
-      if (item.ticket_id) {
-        buttons.push({
-          side: 'start',
-          text: 'Ver',
-          icon: 'eye',
-          handler: () => {
-            this.modalScanner(item);
-          },
-        });
-      }
+    if (item?.ticket_id) {
+      buttons.push({
+        side: 'start',
+        text: 'Ver',
+        icon: 'eye',
+        handler: () => {
+          this.modalScanner(item);
+        },
+      });
     }
 
     const toast = await this.toastController.create({
-      color: color,
+      color,
       header: title || "",
-      message: message,
+      message,
       duration: 2500,
-      buttons: buttons,
+      buttons,
     });
-    toast.present();
+
+    await toast.present();
   }
-  async alert(title: string, subtitle: string, message: string, item: TicketItem) {  // Cambié el tipo de item a TicketItem
-    let buttons = [];
-    buttons = [
+
+  async alert(title: string, subtitle: string, message: string, item: TicketItem | null = null) {
+    const buttons: any[] = [
       {
         text: 'OK',
-        handler: () => {
-        },
+        handler: () => { },
       }
     ];
-    if (item && typeof item.ticket_id !== 'undefined') {
-      // Asegúrate de que el item tenga las propiedades necesarias
-      buttons = [
-        {
-          text: 'Ver',
-          role: 'cancel',
-          cssClass: 'secondary',
-          handler: () => {
-            this.modalScanner(item);  // Aquí item será un TicketItem válido
-          },
+
+    if (item?.ticket_id) {
+      buttons.unshift({
+        text: 'Ver',
+        role: 'cancel',
+        cssClass: 'secondary',
+        handler: () => {
+          this.modalScanner(item);
         },
-        {
-          text: 'OK',
-          handler: () => {
-          },
-        },
-      ];
+      });
     }
 
     const alert = await this.alertController.create({
       header: title,
       subHeader: subtitle,
-      message: message,
-      buttons: buttons
+      message,
+      buttons
     });
+
     await alert.present();
   }
 
+
   isEntered(ticket_id: string) {
-    const occurrences = [];
-    if (this.entered.length == 0 && this.lecturaOnline.length == 0) {
+    if (this.entered.length === 0 && this.lecturaOnline.length === 0) {
       return false;
-    } else {
-      let local = this.entered.find((objeto) => objeto.ticket_id === ticket_id);
-      let online = this.lecturaOnline.find((objeto) => objeto.ticket_id === ticket_id);
-      if (online) {
-        return online;
-      } else {
-        return local;
-      }
     }
+
+    const online = this.lecturaOnline.find(obj => obj.ticket_id === ticket_id);
+
+    if (online) {
+      console.log("online")
+      return online;
+    }
+
+    console.log("local")
+    const local = this.entered.find(obj => obj.ticket_id === ticket_id);
+    return local || false;
+
+
+
+
   }
-  check(item: TicketItem | null | undefined) {
+
+  check(item: TicketItem | null | undefined): boolean {
     if (!item) {
       // Manejar caso cuando item es null o undefined
       return false;
     }
 
-    if (item.acceso != this.acceso) {
-      this.alert('ACCESO INCORRECTO', 'Su acceso es por: ' + item.acceso, "El ticket no es válido para este acceso: " + this.acceso, item);
+    if (item.acceso !== this.acceso) {
+      this.alert(
+        'ACCESO INCORRECTO',
+        'Su acceso es por: ' + item.acceso,
+        'El ticket no es válido para este acceso: ' + this.acceso,
+        item
+      );
       return false;
     }
-    if (item.ticket_status == 0) {
+
+    if (item['ticket_status'] === 0) {
       this.presentToast('danger', 'Ticket cancelado', item.ticket_id, item);
       return false;
     }
-    if (this.isEntered(item.ticket_id)) {
-      if (item.checkin == 0) {
-        this.presentToast('danger', 'Ticket escaneado', 'El ticket ha sido escaneado anteriormente por éste dispositivo', item);
-        return false;
-      } else {
-        console.log('true');
-        return true;
 
+    console.log("ticket_id ", item.ticket_id)
+    const existente = this.isEntered(item.ticket_id);
+    console.log('existente', JSON.stringify(existente, null, 2));
+    if (existente) {
+      if (existente.checkin === 0) {
+        console.log("existente sent")
+        this.presentToast(
+          'danger',
+          'Ticket escaneado',
+          'El ticket ha sido escaneado anteriormente por éste dispositivo',
+          existente
+        );
+        return false;
       }
+      console.log("sent 0")
+
+      return true;
     }
-    if (item.checkin == 0) {
+
+    if (item.checkin === 0) {
       this.presentToast('danger', 'Ticket sin créditos', 'Se agotaron los créditos disponibles para entrar', item);
       return false;
     }
+
     return true;
   }
 
   findTicket(ticket: any) {
-    console.log('ticket',ticket);
     let idEvento = '';
     let codeTick = '';
-    // const tt = ticket.toLowerCase();
-    // const parts = tt.split('-');
-    // if (parts.length !== 2) {
-    //   codeTick = tt;
-    // } else {
-    //   [idEvento, codeTick] = parts;
+    const tt = ticket.toLowerCase();
+    const parts = tt.split('-');
+    if (parts.length !== 2) {
+      codeTick = tt;
+    } else {
+      [idEvento, codeTick] = parts;
+    }
 
+    const response = this.findOccurrences(this.tickets, ticket);
+    // if (idEvento != '') {
+    //   if (idEvento != this.event_id) {
+    //     this.presentToast('danger', 'Evento equivocado', 'Éste ticket no pertenece a éste evento');
+    //   }
     // }
-    this.eventoService.getQr(ticket).subscribe(r => {
-      idEvento = r.eventID;
-      codeTick = r.ticket_id;
-      //this.presentToast('success', codeTick);
-      const response = this.findOccurrences(this.tickets, codeTick);
-      //this.presentAlert2(response);
-      // this.presentToast('success', response);
-      if (!response || response.length == 0) {
-        this.presentToast('danger', 'Ticket no encontrado findTicket', 'No válido para éste evento o actualice los últimos tickets');
-      } else {
-        response.forEach(item => {
 
-          const isValid = this.check(item);
-          if (isValid) {
-            item.checkin--;
+    if (!response || response.length == 0) {
+      this.presentToast('danger', 'Ticket no encontrado', 'No válido para éste evento o actualice los últimos tickets');
+    }
 
-            this.setEnteder(item).then(success => {
-              if (success) {
-                this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', item);
-              }
-            });
-          }
+    const itemFindTicket = response[0];
+    const isValid = this.check(itemFindTicket);
+    console.log('isValid', isValid)
 
-        });
-        // } else {
-        //   this.presentAlert2('else');
+    if (isValid) {
+      itemFindTicket.checkin--;
+      this.setEnteder(itemFindTicket);
+      this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', itemFindTicket);
 
-        //   const item = response[0];
-        //   const isValid = this.check(item);
-        //   if (isValid) {
-        //     item.checkin--;
-        //     this.setEnteder(item);
-        //     this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', item);
-        //   }
-        // }
-      }
-    }, errors => {
-      //this.presentToast('danger', 'entre al primer error');
-      console.log('response', ticket);
-
-      const responseQR = this.findOccurrencesQr(this.listQrPrev, ticket);
-      console.log('response', JSON.stringify(responseQR, null, 2));
-      const response = this.findOccurrences(this.tickets, responseQR[0].ticket_id)
-     
-      //return;
-      if (!response || response.length == 0) {
-        this.presentToast('danger', 'Ticket no encontrado findTicket', 'No válido para éste evento o actualice los últimos tickets');
-      } else {
-        response.forEach(item => {
-
-          const isValid = this.check(item);
-          if (isValid) {
-            item.checkin--;
-
-            this.setEnteder(item).then(success => {
-              if (success) {
-                this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', item);
-              }
-            });
-          }
-
-        });
-        // } else {
-        //   this.presentAlert2('else');
-
-        //   const item = response[0];
-        //   const isValid = this.check(item);
-        //   if (isValid) {
-        //     item.checkin--;
-        //     this.setEnteder(item);
-        //     this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', item);
-        //   }
-        // }
-      }
-    });
-
-  }
-  getEnteder() {
-    this.storage.get(this.key_event_entered).then((entered) => {
-      if (entered) {
-        this.entered = entered;
-      }
-    });
-  }
-  async setEnteder(item: { codeNumericQR: string; ticket_id: any; acceso: any; numeroOrden: any; checkin: any }): Promise<boolean> {
-    const status = await Network.getStatus();
-    return new Promise((resolve, reject) => {
-      const dt = moment().format('YYYY-MM-DD HH:mm:ss');
-      const data = {
-        ticket_id: item.ticket_id,
-        acceso: item.acceso,
-        numeroOrden: item.numeroOrden,
-        evento_id: this.event_id,
-        username: this.user?.username,
-        fecha_lectura: dt,
-        created_at: dt,
-        updated_at: dt,
-        sent: 0,
-        code: '',
-        view: false,
-        ticket_status: 0,
-        event_id: undefined,
-        codeNumericQR: item.codeNumericQR,
-        checkin: item.checkin
-      };
-
-      this.eventoService.checkin(data).subscribe(response => {
-        this.entered.unshift(data); // Si la operación es exitosa, se guarda localmente
-        resolve(true); // Éxito
-      }, errors => {
-        console.log('errors',errors);
-          // Si se detecta un error específico (Código 423), se busca el ticket localmente
-          if (errors.includes("Código 423")) {
-            console.log('errors',errors);
-            this.presentToast('danger', 'Ticket ya escaneado', 'Este ticket ya ha sido usado anteriormente.');
-            this.entered.unshift(data);
-
-            this.storage.set(this.key_event_entered, this.entered);
-
-            resolve(false); // Falló
-
-          }
-          if(errors.includes("Código 0")){
-            this.presentToast('danger', '"Modo offlineo', 'Ticket no procesado');
-            console.log("Modo offline - Ticket no procesado");
-            this.entered.unshift(data); 
-            this.storage.set(this.key_event_entered, this.entered);
-            resolve(true); 
-          }
-      });
-    });
+    }
   }
 
+  async getEnteder() {
+    try {
+      const entered = await this.storage.get(this.key_event_entered);
+      this.entered = Array.isArray(entered) ? entered : [];
+    } catch (error) {
+      console.error('Error al obtener entradas almacenadas:', error);
+      this.entered = [];
+    }
+  }
 
+  setEnteder(item: Ticket) {
+    const dt = moment().format('YYYY-MM-DD HH:mm:ss');
+    const data = {
+      ticket_id: item.ticket_id,
+      acceso: item.acceso,
+      numeroOrden: item.numeroOrden,
+      evento_id: this.event_id,
+      username: this.user?.username,
+      fecha_lectura: dt,
+      created_at: dt,
+      updated_at: dt,
+      sent: 1,
+      code: item.code || '',
+      view: item.view ?? false,
+      ticket_status: 1,
+      event_id: this.event_id,
+      codeNumericQR: item.codeNumericQR || '0',
+      checkin: 0
+    };
+
+    this.eventoService.checkin(data).subscribe(
+      async (response) => {
+
+        this.entered.unshift(data);
+        await this.storage.set(this.key_event_entered, this.entered);
+      },
+      async (errors) => {
+        const registro = {
+          ...data,
+          sent: 0
+        };
+        this.entered.unshift(registro);
+        await this.storage.set(this.key_event_entered, this.entered);
+      }
+    );
+  }
 
   upload() {
-    //console.log('item en ', JSON.stringify(this.entered, null, 2));
-
-
-    // Filtra los tickets que no han sido enviados
+    // Filtra los tickets que no han sido enviados los estan en local
     const ticketsToUpload = this.entered.filter(item => item.sent === 0);
+    console.log('response upload:', JSON.stringify(ticketsToUpload, null, 2));
 
+    //envia los pendietes que estan en local
     ticketsToUpload.forEach((item) => {
-      // Si el ticket ya ha sido utilizado, no lo proceses
-      if (item.ticket_status === 1) {  // 1 podría significar que el ticket ya fue utilizado
-        return;  // Salta este ticket
-      }
 
       const dt = moment().format('YYYY-MM-DD HH:mm:ss');
-      let data: Ticket = {
+      const data: Ticket = {
         ticket_id: item.ticket_id,
         acceso: item.acceso,
         numeroOrden: item.numeroOrden,
@@ -755,85 +812,70 @@ export class ScannerPage implements OnInit {
         username: this.user?.username,
         fecha_lectura: item.fecha_lectura,
         created_at: item.created_at,
-        updated_at: item.updated_at,
+        updated_at: dt, // Actualizar el tiempo de actualización
         sent: 1,
-        code: '', // Asigna un valor adecuado a 'code'
-        view: false, // Asigna un valor adecuado a 'view'
-        ticket_status: 1, // Marca el ticket como "utilizado"
+        code: '', // Asignar valor adecuado si lo tienes
+        view: false, // Asignar valor adecuado si lo tienes
+        ticket_status: 1,
         event_id: this.event_id,
         codeNumericQR: item.codeNumericQR,
+        checkin: item.ticket_status
       };
 
-      // Hacer la solicitud al backend para el check-in
-      this.eventoService.checkin(data).subscribe(
-        response => {
-          this.presentAlert2(response);
+      this.eventoService.checkin(data).subscribe({
+        next: (response) => {
+          //this.presentAlert2(response);
 
           // Actualizar la lista de tickets enviados
-          const rt = this.entered.find((objeto) => objeto.ticket_id === item.ticket_id);
-          if (rt) {
-            const idx = this.entered.indexOf(rt);
-            if (idx !== -1) {
-              this.entered.splice(idx, 1);
-              this.entered.push(data);
-            }
+          const idx = this.entered.findIndex(objeto => objeto.ticket_id === item.ticket_id);
+          if (idx !== -1) {
+            this.entered[idx] = data;  // Reemplaza el ticket con la info actualizada
+          } else {
+            this.entered.push(data); // En caso que no lo encuentre (por seguridad)
           }
 
           // Guardar los tickets actualizados en storage
           this.storage.set(this.key_event_entered, this.entered);
         },
-        error => {
-
+        error: (error) => {
+          console.error('Error al subir ticket:', error);
+          // Aquí puedes manejar el error, por ejemplo, mostrar un toast o alert
         }
-      );
+      });
     });
   }
 
+  async deleteItemFromList(item: any, list: any[], listType: number) {
 
-  deleteItemFromList(item: any, list: any[], listType: number) {
-    console.log('entre a la funcion de deleteItemFromList');
-    const index = list.indexOf(item);
-    if (index > -1) {
-      list.splice(index, 1);
-      switch (listType) {
-        case 0:
-          this.entered = list;
-          this.storage.set(this.key_event_entered, this.entered);
-          break;
-        case 1:
-          this.escaneados = list;
-          this.storage.set(this.key_event_tickets, this.escaneados);
-          break;
-        case 2:
-          this.lecturaOnline = list;
-          this.storage.set(this.key_event_history_online, this.lecturaOnline);
-          this.setLastUpdateHistory(this.lecturaOnline);
-          break;
-        default:
-          break;
-      }
+    // Crear nuevo arreglo sin el item a eliminar
+    const newList = list.filter(i => i !== item);
+
+    switch (listType) {
+      case 0:
+        this.entered = newList;
+        await this.storage.set(this.key_event_entered, this.entered);
+        break;
+      case 1:
+        this.escaneados = newList;
+        await this.storage.set(this.key_event_tickets, this.escaneados);
+        break;
+      case 2:
+        this.lecturaOnline = newList;
+        await this.storage.set(this.key_event_history_online, this.lecturaOnline);
+        this.setLastUpdateHistory(this.lecturaOnline);
+        break;
+      default:
+        break;
     }
   }
 
-
-  findOccurrences(data: Ticket[], ticketId: string): any[] {
-    const occurrences: any[] = [];
-    for (const item of data) {
-      if (item.ticket_id === ticketId) {
-        occurrences.push(item);
-      }
-    }
-    return occurrences;
+  findOccurrences(data: Ticket[], ticketId: string): Ticket[] {
+    return data.filter(item => item.codeNumericQR === ticketId);
   }
-  
-  findOccurrencesQr(data: Ticket[], ticketQr: string): any[] {
-    const occurrences: any[] = [];
-    for (const item of data) {
-      if (item.codeNumericQR === ticketQr) {
-        console.log('item en findqr', JSON.stringify(item, null, 2));
-        occurrences.push(item);
-      }
-    }
+
+  findOccurrencesQr(data: Ticket[], ticketQr: string): Ticket[] {
+    const occurrences = data.filter(item => item.codeNumericQR === ticketQr);
+    occurrences.forEach(item => console.log('item en findqr', JSON.stringify(item, null, 2)));
     return occurrences;
   }
 
@@ -843,7 +885,7 @@ export class ScannerPage implements OnInit {
       componentProps: {
         'item': item,
         'entered': this.entered,
-        'online': this.lecturaOnline,
+        'online': this.lecturaOnline || this.entered,
       }
     });
     modal.onDidDismiss().then(response => {
@@ -851,6 +893,7 @@ export class ScannerPage implements OnInit {
     });
     return await modal.present();
   }
+  
   segmentChanged(ev: any) {
     this.list = ev.detail.value;
   }
@@ -859,14 +902,19 @@ export class ScannerPage implements OnInit {
     this.displayedOnline = this.lecturaOnline.slice(0, 10);
   }
   loadMoreLectura(event: any) {
-    // Carga los siguientes 10 elementos
     const startIndex = this.displayedOnline.length;
     const endIndex = startIndex + 10;
-    if (endIndex <= this.lecturaOnline.length) {
+
+    if (startIndex < this.lecturaOnline.length) {
       this.displayedOnline = this.displayedOnline.concat(this.lecturaOnline.slice(startIndex, endIndex));
-    } else {
-      event.target.complete();
+    }
+
+    event.target.complete();
+
+    // Si ya cargaste todos los elementos, deshabilita el infinite scroll
+    if (this.displayedOnline.length >= this.lecturaOnline.length) {
       event.target.disabled = true;
     }
   }
+
 }
