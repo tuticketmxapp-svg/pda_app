@@ -5,7 +5,7 @@
 export const environment = {
   production: false,
   version: '2.0.4',
-  apiUrl: 'https://leones.accesototal.mx/api/v1/',
+  apiUrl: 'https://api2.accesototal.mx/v1/',
   assets: {
     "no-image-available": "/assets/images/no-image-available.png",
     "img-user-profile": "/assets/images/userpreview.png",

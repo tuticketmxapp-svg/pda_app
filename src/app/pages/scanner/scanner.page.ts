@@ -518,7 +518,7 @@ export class ScannerPage implements OnInit {
       this.isDownloading = false;
     }
 
-    //this.upload();
+    this.upload();
   }
 
 
