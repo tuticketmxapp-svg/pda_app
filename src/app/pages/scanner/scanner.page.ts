@@ -108,6 +108,7 @@ export class ScannerPage implements OnInit {
           this.firstDownload();
         } else {
           this.tickets = tickets;
+          console.log('this.tickets', this.tickets);
           this.setLastUpdate(tickets);
         }
       }).catch(error => {
@@ -127,6 +128,7 @@ export class ScannerPage implements OnInit {
   handleKeyboardEvent(event: KeyboardEvent) {
     const key = event.key;
     if (key === 'Enter') {
+      console.log('code', this.code)
       if (this.code != '') {
         this.findTicket(this.code);
         this.escaneados.unshift({ code: this.code, acceso: this.acceso, date: moment().format('YYYY-MM-DD HH:mm:ss') });
@@ -477,6 +479,7 @@ export class ScannerPage implements OnInit {
 
 
   async autoUpdate() {
+    console.log('entre a autoUpdate');
     this.isDownloading = true;
     try {
       const last_update = this.last_update;
@@ -515,7 +518,7 @@ export class ScannerPage implements OnInit {
       this.isDownloading = false;
     }
 
-    this.upload();
+    //this.upload();
   }
 
 
@@ -567,6 +570,12 @@ export class ScannerPage implements OnInit {
         text: "Descargar todo de nuevo",
         handler: async () => {
           await this.firstDownload();
+        }
+      },
+      {
+        text: "Sincronizar Historial",
+        handler: async () => {
+          this.syncHistorial();
         }
       },
       {
@@ -717,36 +726,48 @@ export class ScannerPage implements OnInit {
   findTicket(ticket: any) {
     let idEvento = '';
     let codeTick = '';
-    const tt = ticket.toLowerCase();
-    const parts = tt.split('-');
-    if (parts.length !== 2) {
-      codeTick = tt;
+
+    // ✅ Verificar si es numérico
+    const isNumeric = /^\d+$/.test(ticket);
+
+    if (isNumeric) {
+      codeTick = ticket;
     } else {
-      [idEvento, codeTick] = parts;
+      const tt = ticket.toLowerCase();
+      const parts = tt.split('-');
+
+      if (parts.length !== 2) {
+        codeTick = tt;
+      } else {
+        [idEvento, codeTick] = parts;
+      }
     }
 
-    const response = this.findOccurrences(this.tickets, ticket);
-    // if (idEvento != '') {
-    //   if (idEvento != this.event_id) {
-    //     this.presentToast('danger', 'Evento equivocado', 'Éste ticket no pertenece a éste evento');
-    //   }
-    // }
+    console.log('Ticket:', ticket);
+    console.log('Tipo:', isNumeric ? 'numérico' : 'alfanumérico');
+    console.log('codeTick:', codeTick);
+    console.log('idEvento:', idEvento);
 
-    if (!response || response.length == 0) {
+    // ✅ Usar función correspondiente según tipo
+    const response = isNumeric
+      ? this.findOccurrences(this.tickets, ticket)
+      : this.findOccurrencesAlfa(this.tickets, codeTick);
+
+    if (!response || response.length === 0) {
       this.presentToast('danger', 'Ticket no encontrado', 'No válido para éste evento o actualice los últimos tickets');
+      return;
     }
 
     const itemFindTicket = response[0];
     const isValid = this.check(itemFindTicket);
-    console.log('isValid', isValid)
 
     if (isValid) {
       itemFindTicket.checkin--;
       this.setEnteder(itemFindTicket);
       this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', itemFindTicket);
-
     }
   }
+
 
   async getEnteder() {
     try {
@@ -777,6 +798,7 @@ export class ScannerPage implements OnInit {
       codeNumericQR: item.codeNumericQR || '0',
       checkin: 0
     };
+
 
     this.eventoService.checkin(data).subscribe(
       async (response) => {
@@ -872,6 +894,10 @@ export class ScannerPage implements OnInit {
   findOccurrences(data: Ticket[], ticketId: string): Ticket[] {
     return data.filter(item => item.codeNumericQR === ticketId);
   }
+  findOccurrencesAlfa(data: Ticket[], ticketId: string): Ticket[] {
+    console.log('item en findqr', JSON.stringify(data, null, 2));
+    return data.filter(item => item.ticket_id === ticketId);
+  }
 
   findOccurrencesQr(data: Ticket[], ticketQr: string): Ticket[] {
     const occurrences = data.filter(item => item.codeNumericQR === ticketQr);
@@ -893,7 +919,7 @@ export class ScannerPage implements OnInit {
     });
     return await modal.present();
   }
-  
+
   segmentChanged(ev: any) {
     this.list = ev.detail.value;
   }
@@ -916,5 +942,24 @@ export class ScannerPage implements OnInit {
       event.target.disabled = true;
     }
   }
+  async syncHistorial() {
+    this.escaneados.forEach((item) => {
+      const rt = this.lecturaOnline.find((objeto) => objeto.codeNumericQR === item.code);
 
+      console.log('item en sincronizar historial ', JSON.stringify(item, null, 2));
+      console.log('this.lecturaOnline ', JSON.stringify(this.lecturaOnline, null, 2));
+      console.log('rt', rt);
+      //return;
+      if (!rt) {
+        this.findTicket(item.code);
+      }
+    });
+    const alertHistorial = await this.alertController.create({
+      header: "SYNC HISTORIAL",
+      subHeader: "PROCESO TERMINADO",
+      message: "PROCESO TERMINADO",
+      buttons: ['OK']
+    });
+    await alertHistorial.present();
+  }
 }
