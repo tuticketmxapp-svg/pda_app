@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Component, HostListener } from '@angular/core';
-import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
-import { Storage } from '@ionic/storage';
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+import { IonicStorageModule, Storage } from '@ionic/storage-angular';
 
 @Component({
     selector: 'app-valladolid',
@@ -61,17 +61,17 @@ export class ValladolidPage {
         }
     }
     async scanQRCode() {
-        try {
-            const { barcodes } = await BarcodeScanner.scan(); // Escanear el código QR
-            if (barcodes && barcodes.length > 0) {
-                const scannedCode = barcodes[0].displayValue; // Obtener el valor del QR escaneado
-                this.processQRCode(scannedCode); // Procesar el código escaneado
-            } else {
-                console.log('No se detectaron códigos QR.');
-            }
-        } catch (error) {
-            console.error('Error al escanear QR:', error);
-        }
+        // try {
+        //     const { barcodes } = await BarcodeScanner.startScan(); // Escanear el código QR
+        //     if (barcodes && barcodes.length > 0) {
+        //         const scannedCode = barcodes[0].displayValue; // Obtener el valor del QR escaneado
+        //         this.processQRCode(scannedCode); // Procesar el código escaneado
+        //     } else {
+        //         console.log('No se detectaron códigos QR.');
+        //     }
+        // } catch (error) {
+        //     console.error('Error al escanear QR:', error);
+        // }
     }
     async updateStorage() {
         await this.storage.set(this.storageKey, this.qrCodes);

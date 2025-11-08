@@ -1,4 +1,4 @@
-package com.example.app;
+package com.example.app; // reemplaza con tu package real
 
 import com.getcapacitor.BridgeActivity;
 

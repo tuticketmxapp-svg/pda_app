@@ -7,9 +7,7 @@ import { ScannerPageRoutingModule } from './scanner-routing.module';
 import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
 import { HttpClient } from '@angular/common/http';
 import { Broadcaster } from '@awesome-cordova-plugins/broadcaster/ngx';
-import { Storage } from '@ionic/storage';
 import { PipesModule } from 'src/app/pipes/pipes.module';
-import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 import { IonicStorageModule } from '@ionic/storage-angular';
 export function HttpLoaderFactory(http: HttpClient) {
 

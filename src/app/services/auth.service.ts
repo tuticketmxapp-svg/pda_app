@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { map } from 'rxjs/operators';
-import { Storage } from '@ionic/storage';
+import { IonicStorageModule, Storage } from '@ionic/storage-angular';
 import { BehaviorSubject } from 'rxjs';
 import { Platform } from '@ionic/angular';
 import { JwtHelperService } from '@auth0/angular-jwt';
@@ -24,12 +24,15 @@ export class AuthService {
     private platform: Platform,
     private jwth: JwtHelperService,
     private sharedService: SharedService,
+    private jwtHelper: JwtHelperService
   ) {
     this.platform.ready().then(() => {
       this.checkToken();
     });
   }
-
+ public isTokenExpired(token: string): boolean {
+    return this.jwtHelper.isTokenExpired(token);
+  }
   checkToken() {
     return this.storage.get(TOKEN_KEY).then(token => {
       if (token) {

@@ -4,8 +4,7 @@ import { ToastController } from '@ionic/angular';
 import { ActionSheetController, AlertController, LoadingController, ModalController, NavController } from '@ionic/angular';
 import { HostListener } from '@angular/core';
 import { Broadcaster } from '@awesome-cordova-plugins/broadcaster/ngx';
-import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
-import { Storage } from '@ionic/storage';
+import { IonicStorageModule, Storage } from '@ionic/storage-angular';
 import { ModalScannerPage } from './modal/modal.page';
 import * as moment from 'moment';
 import { EventoService } from 'src/app/services/evento.service';
@@ -43,6 +42,7 @@ interface TicketItem {
   checkin: number;
 
 }
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 
 @Component({
   selector: 'app-scanner',
@@ -143,40 +143,57 @@ export class ScannerPage implements OnInit {
     }
   }
 
+
   async cameraScan(): Promise<void> {
     try {
-      const granted = await this.requestPermissions();
-      if (!granted) {
-        this.presentAlert();
-        return;
-      }
-      // Inicia el escaneo
-      const { barcodes } = await BarcodeScanner.scan();
-      if (barcodes && barcodes.length > 0) {
-        this.barcodes.push(...barcodes);
+      // 🔹 Opcional: ocultar fondo para modo cámara
+      await BarcodeScanner.hideBackground();
+
+      document.body.classList.add('scanner-active');
+
+      // 🔹 Inicia el escaneo
+      const result = await BarcodeScanner.startScan();
+
+      if (result.hasContent) {
+        console.log('Código escaneado:', result.content);
+        this.barcodes.push(result.content);
       } else {
+        console.warn('No se detectó ningún código');
       }
+
+      // 🔹 Mostrar nuevamente el fondo
+      await BarcodeScanner.showBackground();
+      document.body.classList.remove('scanner-active');
+
     } catch (err) {
-      this.presentErrorAlert();
+      console.error('Error al escanear código:', err);
+
+      await BarcodeScanner.showBackground();
+      document.body.classList.remove('scanner-active');
     }
   }
 
-  async requestPermissions(): Promise<boolean> {
-    try {
-      const result = await BarcodeScanner.requestPermissions();
-      const cameraStatus = result?.camera ?? null;
+// async requestPermissions(): Promise<boolean> {
+//   try {
+//     // Solicita los permisos al usuario
+//     const result = await BarcodeScanner.requestPermissions();
 
-      if (cameraStatus === 'granted' || cameraStatus === 'limited') {
-        return true;
-      } else {
-        console.warn('Permisos de cámara no concedidos:', cameraStatus);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error solicitando permisos de cámara:', error);
-      return false;
-    }
-  }
+//     // En esta versión, el resultado viene en formato:
+//     // { camera: 'granted' | 'denied' | 'limited' | 'prompt' }
+//     const cameraStatus = result.camera;
+
+//     if (cameraStatus === 'granted' || cameraStatus === 'limited') {
+//       console.log('✅ Permisos de cámara concedidos');
+//       return true;
+//     } else {
+//       console.warn('🚫 Permisos de cámara no concedidos:', cameraStatus);
+//       return false;
+//     }
+//   } catch (error) {
+//     console.error('❌ Error solicitando permisos de cámara:', error);
+//     return false;
+//   }
+// }
 
   async presentAlert2(response: any) {
     // Intentamos mostrar un mensaje más limpio
@@ -295,13 +312,15 @@ export class ScannerPage implements OnInit {
   }
 
   async ngOnInit() {
-    try {
-      const result = await BarcodeScanner.isSupported();
-      this.isSupported = result.supported;
+     try {
+      const isAvailable = !!BarcodeScanner.startScan;
+      this.isSupported = isAvailable;
+      console.log('BarcodeScanner disponible:', isAvailable);
     } catch (error) {
-      console.error('Error checking BarcodeScanner support:', error);
+      console.error('Error verificando soporte de BarcodeScanner:', error);
       this.isSupported = false;
     }
+  
 
     await this.localScaned();
     await this.getTotalTickets();

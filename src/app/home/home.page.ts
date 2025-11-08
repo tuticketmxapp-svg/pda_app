@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { ModalController, NavController, LoadingController, AlertController, ActionSheetController } from '@ionic/angular';
-import { Storage } from '@ionic/storage';
+import { IonicStorageModule, Storage } from '@ionic/storage-angular';
 // import { LanguageService } from 'src/services';
 // import { EventoService } from 'src/services/evento.service';
 import * as moment from 'moment';
@@ -9,7 +9,25 @@ import { AuthService } from '../services/auth.service';
 import { SharedService } from '../services/shared.service';
 import { EventoService } from '../services/evento.service';
 import { LanguageService } from '../services';
-
+import { SqliteService } from '../services/sqlite.service';
+export interface Ticket {
+  code: string;
+  view: boolean;
+  ticket_status: number;
+  [key: string]: any;
+  event_id: any;
+  ticket_id: string;
+  acceso: string;
+  numeroOrden: any;
+  evento_id: string;
+  username: any;
+  fecha_lectura: string;
+  created_at: string;
+  updated_at: string;
+  sent: number;
+  codeNumericQR: string;
+  checkin: number;
+}
 @Component({
   selector: 'app-home',
   templateUrl: 'home.page.html',
@@ -20,6 +38,7 @@ export class HomePage {
   user: any;
   eventos: any;
   token: any;
+  
   constructor(
     private eventoService: EventoService,
     private navCtrl: NavController,
@@ -29,6 +48,7 @@ export class HomePage {
     private storage: Storage,
     private langSvc: LanguageService,
     private loadingCtrl: LoadingController,
+    private sqliteService: SqliteService
   ) {
     this.langSvc.getSelectedIdiom$().subscribe((result: { idioma: any; }) => {
       // translate.addLangs(['es', 'pt']);
@@ -37,8 +57,10 @@ export class HomePage {
     });
     this.getUser();
   }
-  ngOnInit() {
+  async ngOnInit() {
     this.getUpcomingEvents();
+    await this.sqliteService.initDB();
+    
   }
   async ionViewWillEnter() {
     this.token = await this.storage.get('access_token');
@@ -71,21 +93,54 @@ export class HomePage {
       this.storage.set('user', data);
     });
   }
-  async selectEntrada(event: { accesos: any[]; id: any | string; name: any; }) {
-    let buttons: { text: any; handler: () => Promise<void>; }[] = [];
-    event.accesos.forEach(element => {
-      buttons.push({
-        text: element,
-        handler: async () => {
-          await this.navCtrl.navigateRoot(['/scanner', event.id], { queryParams: { name: event.name, acceso: element } })
-        }
-      });
-    });
+async selectEntrada(event: { accesos: any[]; id: any | string; name: any; }) {
+  let buttons: { text: any; handler: () => Promise<void>; }[] = [];
+console.log('event.id',event.id);
+  event.accesos.forEach(element => {
+    buttons.push({
+      text: element,
+      handler: async () => {
+        // const loading = await this.loadingController.create({
+        //   message: 'Cargando tickets...',
+        // });
+        //await loading.present();
 
-    const actionSheet = await this.actionSheetController.create({
-      header: 'Seleccione entrada',
-      buttons
+        // Usando subscribe en lugar de toPromise
+        this.eventoService.getTicekts(event.id, '').subscribe({
+          next: async (tickets: Ticket[]) => {
+            try {
+              // Guardar cada ticket en SQLite
+              for (const t of tickets) {
+                await this.sqliteService.addTicket(t);
+              }
+
+              console.log('✅ Tickets guardados en SQLite');
+
+              // Navegar a scanner pasando el evento, acceso y tickets
+              await this.navCtrl.navigateRoot(['/scanner', event.id], { 
+                queryParams: { name: event.name, acceso: element } 
+              });
+            } catch (err) {
+              console.error('Error guardando tickets en SQLite:', err);
+            } finally {
+             // await loading.dismiss();
+            }
+          },
+          error: async (error) => {
+            console.error('Error descargando tickets:', error);
+            //await loading.dismiss();
+          }
+        });
+      }
     });
-    await actionSheet.present();
-  }
+  });
+
+  const actionSheet = await this.actionSheetController.create({
+    header: 'Seleccione entrada',
+    buttons
+  });
+  await actionSheet.present();
+}
+
+
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { map } from 'rxjs/operators';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { Storage } from '@ionic/storage';
+import { IonicStorageModule, Storage } from '@ionic/storage-angular';
 import { environment } from 'src/environments/environment';
 import { Agencia,UsuarioStyles, User  } from '../models';
 

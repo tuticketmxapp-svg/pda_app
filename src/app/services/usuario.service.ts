@@ -11,7 +11,7 @@ import { User } from '../models';
 export class UsuarioService {
   usuario: User | undefined;
   constructor(
-    private http: HttpClient
+    private http: HttpClient,
   ) { }
 
   setUser(user: any) {
