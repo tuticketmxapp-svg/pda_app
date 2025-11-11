@@ -1,72 +1,90 @@
 import { Injectable } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
-import { CapacitorSQLite, SQLiteDBConnection } from '@capacitor-community/sqlite';
-
-export interface Ticket {
-  code: string;
-  view: boolean;
-  ticket_status: number;
-  [key: string]: any;
-  event_id: any;
-  ticket_id: string;
-  acceso: string;
-  numeroOrden: any;
-  evento_id: string;
-  username: any;
-  fecha_lectura: string;
-  created_at: string;
-  updated_at: string;
-  sent: number;
-  codeNumericQR: string;
-  checkin: number;
-}
+import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class SqliteService {
-  private db!: SQLiteDBConnection;
+  private sqlite: SQLiteConnection;
+  private db: SQLiteDBConnection | null = null;
+  private isInitialized = false;
+  private readonly dbName = 'checkin_db';
 
-  constructor() {}
+  constructor() {
+    this.sqlite = new SQLiteConnection(CapacitorSQLite);
+  }
 
-  async initDB(): Promise<void> {
+  // Inicializa la base de datos completa (crea tablas si faltan)
+  async initializeDatabase() {
+    await this.initDB();
+    await this.ensureTablesExist(); // Crea tabla scanned_tickets si no existe
+  }
+  /**
+ * Inicializa base de datos para un evento específico
+ * Se usa desde selectEntrada() cuando el usuario elige un evento.
+ */
+  async initEventDB(eventId: string): Promise<void> {
+    await this.initDB(); // abre conexión si no existe
+
+    if (!this.db) {
+      console.error(' No se pudo abrir la base de datos');
+      return;
+    }
+
+    // Crea la tabla de tickets del evento si no existe
+    await this.db.execute(`
+    CREATE TABLE IF NOT EXISTS tickets (
+      code TEXT PRIMARY KEY,
+      view INTEGER,
+      ticket_status INTEGER,
+      event_id TEXT,
+      ticket_id TEXT,
+      acceso TEXT,
+      numeroOrden TEXT,
+      evento_id TEXT,
+      username TEXT,
+      fecha_lectura TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      sent INTEGER,
+      codeNumericQR TEXT,
+      checkin INTEGER,
+      codigoCompra TEXT
+    );
+  `);
+
+    // Índices
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_codeNumericQR ON tickets (codeNumericQR);`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_ticket_id ON tickets (ticket_id);`);
+
+    // Garantiza que exista la tabla scanned_tickets (solo una vez)
+    await this.ensureTablesExist();
+
+    console.log(`Base de datos lista para evento: ${eventId}`);
+  }
+
+
+  //  Abre la conexión principal (solo una vez)
+  async initDB() {
+    if (this.isInitialized && this.db) {
+      console.log('Base de datos ya inicializada');
+      return this.db;
+    }
+
     try {
-      const platform = Capacitor.getPlatform();
+      const isConn = (await this.sqlite.isConnection(this.dbName, false)).result;
 
-      if (platform === 'web') {
-        const jeepEl = document.querySelector('jeep-sqlite');
-        if (!jeepEl) {
-          console.error('❌ jeep-sqlite no encontrado en el DOM');
-          return;
-        }
-
-        await CapacitorSQLite.initWebStore();
-
-        await CapacitorSQLite.createConnection({
-          database: 'mydb',
-          version: 1,
-          encrypted: false,
-          mode: 'no-encryption',
-          readonly: false,
-        });
-
-        this.db = await CapacitorSQLite.open({ database: 'mydb' }) as unknown as SQLiteDBConnection;
-
+      if (isConn) {
+        console.log('🔄 Reutilizando conexión existente');
+        this.db = await this.sqlite.retrieveConnection(this.dbName, false);
       } else {
-        this.db = await CapacitorSQLite.createConnection({
-          database: 'mydb',
-          version: 1,
-          encrypted: false,
-          mode: 'no-encryption',
-          readonly: false,
-        }) as unknown as SQLiteDBConnection;
-
-        await this.db.open();
+        console.log('🆕 Creando nueva conexión SQLite');
+        this.db = await this.sqlite.createConnection(this.dbName, false, 'no-encryption', 1, false);
       }
 
-      console.log('✅ Base de datos abierta correctamente');
+      await this.db.open();
 
-      // Crear tabla tickets
+      // Crear tabla principal (tickets)
       await this.db.execute(`
         CREATE TABLE IF NOT EXISTS tickets (
           code TEXT PRIMARY KEY,
@@ -83,93 +101,230 @@ export class SqliteService {
           updated_at TEXT,
           sent INTEGER,
           codeNumericQR TEXT,
-          checkin INTEGER
+          checkin INTEGER,
+          codigoCompra TEXT
         );
       `);
 
-      console.log('✅ Tabla tickets creada correctamente');
-
+      this.isInitialized = true;
+      console.log(' Base de datos inicializada correctamente');
+      return this.db;
     } catch (err) {
-      console.error('❌ Error al inicializar la base de datos:', err);
+      console.error(' Error al inicializar la base de datos:', err);
+      this.db = null;
+      this.isInitialized = false;
+      return null;
     }
   }
 
-  getDB(): SQLiteDBConnection {
+  // Verifica o crea tabla de escaneos
+  async ensureTablesExist() {
+    if (!this.db) {
+      console.warn('⚠️ Base de datos aún no inicializada, inicializando...');
+      await this.initDB();
+    }
+
+    const result = await this.db!.query(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name='scanned_tickets';
+    `);
+
+    const exists = result.values && result.values.length > 0;
+
+    if (!exists) {
+      console.log('🆕 Creando tabla scanned_tickets...');
+      await this.db!.run(`
+        CREATE TABLE IF NOT EXISTS scanned_tickets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ticket_id TEXT,
+          codeNumericQR TEXT,
+          acceso TEXT,
+          numeroOrden INTEGER,
+          evento_id TEXT,
+          username TEXT,
+          fecha_lectura TEXT,
+          created_at TEXT,
+          updated_at TEXT,
+          sent INTEGER DEFAULT 0,
+          offline INTEGER DEFAULT 0,
+          online INTEGER DEFAULT 0,
+          UNIQUE(ticket_id)
+        );
+      `);
+      console.log(' Tabla scanned_tickets creada correctamente');
+    } else {
+      console.log('📦 Tabla scanned_tickets ya existe');
+    }
+  }
+
+  // Inserta un ticket normal
+  async addTicket(ticket: any) {
+    if (!this.db) {
+      console.error(' La base de datos no está inicializada');
+      return;
+    }
+
+    try {
+      await this.db.run(
+        `INSERT OR REPLACE INTO tickets (
+        code, view, ticket_status, event_id, ticket_id, acceso,
+        numeroOrden, evento_id, username, fecha_lectura, created_at,
+        updated_at, sent, codeNumericQR, checkin, codigoCompra
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          ticket.code,
+          ticket.view ? 1 : 0,
+          ticket.ticket_status,
+          ticket.event_id,
+          ticket.ticket_id,
+          ticket.acceso,
+          ticket.numeroOrden,
+          ticket.evento_id,
+          ticket.username,
+          ticket.fecha_lectura,
+          ticket.created_at,
+          ticket.updated_at,
+          ticket.sent,
+          ticket.codeNumericQR,
+          ticket.checkin,
+          ticket.codigoCompra || null // 👈 Nuevo campo
+        ]
+      );
+
+      console.log(' Ticket insertado correctamente:', ticket?.ticket_id || '(sin id)');
+    } catch (err) {
+      console.error(' Error insertando ticket:', err);
+    }
+  }
+
+
+  async getDatabase() {
+    if (!this.db) throw new Error(' La base de datos no está inicializada');
     return this.db;
   }
 
-  // Funciones CRUD para tickets
-
-async addTicket(ticket: Ticket) {
-  if (!this.db) {
-    console.error('❌ La base de datos no está inicializada');
-    return;
+  async getTicketsByEvent(event_id: string): Promise<{ values: any[] }> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db.query(`SELECT * FROM tickets WHERE event_id = ?;`, [event_id]);
+      return { values: result.values ?? [] };
+    } catch (error) {
+      console.error(' Error obteniendo tickets por evento:', error);
+      return { values: [] };
+    }
   }
 
-  // Crear tabla si no existe
-  await this.db.execute(`
-    CREATE TABLE IF NOT EXISTS tickets (
-      code TEXT PRIMARY KEY,
-      view INTEGER,
-      ticket_status INTEGER,
-      event_id TEXT,
-      ticket_id TEXT,
-      acceso TEXT,
-      numeroOrden TEXT,
-      evento_id TEXT,
-      username TEXT,
-      fecha_lectura TEXT,
-      created_at TEXT,
-      updated_at TEXT,
-      sent INTEGER,
-      codeNumericQR TEXT,
-      checkin INTEGER
-    );
-  `);
+  //  Guarda ticket escaneado con control offline/online
+  async addScannedTicket(ticket: any, isOnline: boolean): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      const now = new Date().toISOString();
 
-  // Insertar ticket
-  await this.db.run(`
-    INSERT OR REPLACE INTO tickets (
-      code, view, ticket_status, event_id, ticket_id, acceso,
-      numeroOrden, evento_id, username, fecha_lectura, created_at,
-      updated_at, sent, codeNumericQR, checkin
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-  `, [
-    ticket.code,
-    ticket.view ? 1 : 0,
-    ticket.ticket_status,
-    ticket.event_id,
-    ticket.ticket_id,
-    ticket.acceso,
-    ticket.numeroOrden,
-    ticket.evento_id,
-    ticket.username,
-    ticket.fecha_lectura,
-    ticket.created_at,
-    ticket.updated_at,
-    ticket.sent,
-    ticket.codeNumericQR,
-    ticket.checkin
-  ]);
+      await db.run(
+        `INSERT OR REPLACE INTO scanned_tickets (
+    ticket_id, codeNumericQR, acceso, numeroOrden, evento_id,
+    username, fecha_lectura, created_at, updated_at, sent,
+    offline, online, codigoCompra
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          ticket.ticket_id,
+          ticket.codeNumericQR,
+          ticket.acceso,
+          ticket.numeroOrden,
+          ticket.evento_id || ticket.event_id,
+          ticket.username || '',
+          now,
+          now,
+          now,
+          0,
+          isOnline ? 0 : 1,
+          isOnline ? 1 : 0,
+          ticket.codigoCompra || null
+        ]
+      );
+
+
+
+      console.log(' Ticket escaneado guardado en scanned_tickets:', ticket.ticket_id);
+    } catch (err) {
+      console.error(' Error insertando ticket escaneado:', err);
+    }
+  }
+
+  async isTicketScanned(ticket_id: string): Promise<boolean> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db.query(`SELECT COUNT(*) as count FROM scanned_tickets WHERE ticket_id = ?;`, [ticket_id]);
+      const count = result.values?.[0]?.count || 0;
+      return count > 0;
+    } catch (err) {
+      console.error(' Error verificando ticket escaneado:', err);
+      return false;
+    }
+  }
+  /**
+   *Sincroniza todos los escaneos offline con el servidor
+   * Llama este método cuando la app recupere conexión.
+   */
+  async syncOfflineScans(uploadFn: (scans: any[]) => Promise<boolean>): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+
+      //  Obtener todos los escaneos pendientes (offline)
+      const result = await db.query(`
+      SELECT * FROM scanned_tickets WHERE offline = 1 AND sent = 0;
+    `);
+
+      const scans = result.values ?? [];
+
+      if (scans.length === 0) {
+        console.log(' No hay escaneos offline pendientes por sincronizar');
+        return;
+      }
+
+      console.log(`📤 Sincronizando ${scans.length} escaneos offline...`);
+
+      //  Enviar al servidor (tu función la maneja)
+      const success = await uploadFn(scans);
+
+      if (!success) {
+        console.warn('⚠️ La sincronización falló, reintentará más tarde');
+        return;
+      }
+
+      //Marcar como enviados
+      const ids = scans.map(s => s.ticket_id);
+      const placeholders = ids.map(() => '?').join(',');
+
+      await db.run(
+        `UPDATE scanned_tickets 
+       SET sent = 1, offline = 0, online = 1 
+       WHERE ticket_id IN (${placeholders});`,
+        ids
+      );
+
+      console.log(` Escaneos sincronizados correctamente (${scans.length})`);
+    } catch (err) {
+      console.error(' Error durante la sincronización offline:', err);
+    }
+  }
+
+  async closeDB() {
+    if (this.db) {
+      await this.sqlite.closeConnection(this.dbName, false);
+      this.db = null;
+      this.isInitialized = false;
+      console.log('🔒 Base de datos cerrada');
+    }
+  }
+  async countTickets(): Promise<number> {
+  try {
+    const db = await this.getDatabase();
+    const result = await db.query(`SELECT COUNT(*) as total FROM tickets;`);
+    return result.values?.[0]?.total ?? 0;
+  } catch (err) {
+    console.error('❌ Error contando tickets:', err);
+    return 0;
+  }
 }
 
-
-
-  async getTickets(): Promise<Ticket[]> {
-    const res = await this.db.query(`SELECT * FROM tickets`);
-    return res.values as Ticket[];
-  }
-
-  async getTicketByCode(code: string): Promise<Ticket | null> {
-    const res = await this.db.query(`SELECT * FROM tickets WHERE code = ?`, [code]);
-    return res.values?.[0] as Ticket || null;
-  }
-
-  async deleteTicket(code: string) {
-    await this.db.run(`DELETE FROM tickets WHERE code = ?`, [code]);
-  }
-
-  async clearTickets() {
-    await this.db.run(`DELETE FROM tickets`);
-  }
 }

@@ -43,7 +43,8 @@ export class AppComponent {
 
   async ngOnInit() {
     await this.storage.create();
-    await this.sqliteService.initDB(); // Inicializa SQLite correctamente
+    console.log('🔄 Inicializando SQLite...');
+    await this.sqliteService.initDB();
   }
 
   getUserInfo() {

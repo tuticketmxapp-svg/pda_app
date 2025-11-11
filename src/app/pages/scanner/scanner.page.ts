@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { ToastController } from '@ionic/angular';
+import { Platform, ToastController } from '@ionic/angular';
 import { ActionSheetController, AlertController, LoadingController, ModalController, NavController } from '@ionic/angular';
 import { HostListener } from '@angular/core';
 import { Broadcaster } from '@awesome-cordova-plugins/broadcaster/ngx';
@@ -43,6 +43,7 @@ interface TicketItem {
 
 }
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+import { SqliteService } from 'src/app/services/sqlite.service';
 
 @Component({
   selector: 'app-scanner',
@@ -78,6 +79,7 @@ export class ScannerPage implements OnInit {
   isSupported = false;
   barcodes: any;
   listQrPrev: any[] = [];
+
   constructor(
     private route: ActivatedRoute,
     private navCtrl: NavController,
@@ -90,39 +92,42 @@ export class ScannerPage implements OnInit {
     private loadingCtrl: LoadingController,
     private modalController: ModalController,
     public toastController: ToastController,
+    private platform: Platform,
+    private sqliteService: SqliteService
+
   ) {
     this.route.queryParams.subscribe(params => {
-      this.title = params["name"];
+      //   this.title = params["name"];
       this.acceso = params["acceso"];
-    });
-    this.route.params.subscribe(async params => {
-      this.event_id = params["event_id"];
-      this.key_event_history = 'tickets_history_' + this.event_id;
-      this.key_event_history_online = 'tickets_history_online' + this.event_id;
-      this.key_event_tickets = 'tickets_dataset_' + this.event_id;
-      this.key_event_entered = 'tickets_entered_' + this.event_id;
+      // });
+      // this.route.params.subscribe(async params => {
+      //   this.event_id = params["event_id"];
+      //   this.key_event_history = 'tickets_history_' + this.event_id;
+      //   this.key_event_history_online = 'tickets_history_online' + this.event_id;
+      //   this.key_event_tickets = 'tickets_dataset_' + this.event_id;
+      //   this.key_event_entered = 'tickets_entered_' + this.event_id;
 
-      this.storage.get(this.key_event_tickets).then((tickets) => {
+      //   this.storage.get(this.key_event_tickets).then((tickets) => {
 
-        if (!Array.isArray(tickets) || tickets.length === 0) {
-          this.firstDownload();
-        } else {
-          this.tickets = tickets;
-          console.log('this.tickets', this.tickets);
-          this.setLastUpdate(tickets);
-        }
-      }).catch(error => {
-        console.error('Error al obtener tickets desde el storage:', error);
-        this.firstDownload();
-      });
+      //     if (!Array.isArray(tickets) || tickets.length === 0) {
+      //       this.firstDownload();
+      //     } else {
+      //       this.tickets = tickets;
+      //       console.log('this.tickets', this.tickets);
+      //       this.setLastUpdate(tickets);
+      //     }
+      //   }).catch(error => {
+      //     console.error('Error al obtener tickets desde el storage:', error);
+      //     this.firstDownload();
+      //   });
 
-      this.getEnteder();
-      this.getHistorialOffline()
+      //   this.getEnteder();
+      //   this.getHistorialOffline()
     });
     setInterval(() => {
       this.ref.detectChanges();
     }, 100);
-    this.getUser();
+    //this.getUser();
   }
   @HostListener('document:keypress', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
@@ -132,7 +137,7 @@ export class ScannerPage implements OnInit {
       if (this.code != '') {
         this.findTicket(this.code);
         this.escaneados.unshift({ code: this.code, acceso: this.acceso, date: moment().format('YYYY-MM-DD HH:mm:ss') });
-        this.storage.set(this.key_event_history, this.escaneados);
+        //this.storage.set(this.key_event_history, this.escaneados);
         this.code = '';
         // alert('entre al principio if');
       }
@@ -144,56 +149,48 @@ export class ScannerPage implements OnInit {
   }
 
 
+
   async cameraScan(): Promise<void> {
-    try {
-      // 🔹 Opcional: ocultar fondo para modo cámara
-      await BarcodeScanner.hideBackground();
+    await BarcodeScanner.checkPermission({ force: true });
 
-      document.body.classList.add('scanner-active');
+    // Oculta fondo (solo efecto visual)
+    document.body.classList.add('scanner-active');
+    await BarcodeScanner.hideBackground();
 
-      // 🔹 Inicia el escaneo
-      const result = await BarcodeScanner.startScan();
+    const result = await BarcodeScanner.startScan();
 
-      if (result.hasContent) {
-        console.log('Código escaneado:', result.content);
-        this.barcodes.push(result.content);
-      } else {
-        console.warn('No se detectó ningún código');
-      }
-
-      // 🔹 Mostrar nuevamente el fondo
-      await BarcodeScanner.showBackground();
-      document.body.classList.remove('scanner-active');
-
-    } catch (err) {
-      console.error('Error al escanear código:', err);
-
-      await BarcodeScanner.showBackground();
-      document.body.classList.remove('scanner-active');
+    if (result.hasContent) {
+      console.log('Código escaneado:', result.content);
+    } else {
+      console.log('No se detectó ningún código');
     }
+
+    await BarcodeScanner.showBackground();
+    document.body.classList.remove('scanner-active');
   }
 
-// async requestPermissions(): Promise<boolean> {
-//   try {
-//     // Solicita los permisos al usuario
-//     const result = await BarcodeScanner.requestPermissions();
 
-//     // En esta versión, el resultado viene en formato:
-//     // { camera: 'granted' | 'denied' | 'limited' | 'prompt' }
-//     const cameraStatus = result.camera;
+  // async requestPermissions(): Promise<boolean> {
+  //   try {
+  //     // Solicita los permisos al usuario
+  //     const result = await BarcodeScanner.requestPermissions();
 
-//     if (cameraStatus === 'granted' || cameraStatus === 'limited') {
-//       console.log('✅ Permisos de cámara concedidos');
-//       return true;
-//     } else {
-//       console.warn('🚫 Permisos de cámara no concedidos:', cameraStatus);
-//       return false;
-//     }
-//   } catch (error) {
-//     console.error('❌ Error solicitando permisos de cámara:', error);
-//     return false;
-//   }
-// }
+  //     // En esta versión, el resultado viene en formato:
+  //     // { camera: 'granted' | 'denied' | 'limited' | 'prompt' }
+  //     const cameraStatus = result.camera;
+
+  //     if (cameraStatus === 'granted' || cameraStatus === 'limited') {
+  //       console.log( Permisos de cámara concedidos');
+  //       return true;
+  //     } else {
+  //       console.warn('🚫 Permisos de cámara no concedidos:', cameraStatus);
+  //       return false;
+  //     }
+  //   } catch (error) {
+  //     console.error(' Error solicitando permisos de cámara:', error);
+  //     return false;
+  //   }
+  // }
 
   async presentAlert2(response: any) {
     // Intentamos mostrar un mensaje más limpio
@@ -251,15 +248,15 @@ export class ScannerPage implements OnInit {
   }
 
 
-  async getUser(): Promise<void> {
-    try {
-      const user = await this.storage.get('user');
-      this.user = user;
-    } catch (error) {
-      console.error('Error al obtener el usuario del storage', error);
-      this.user = null; // o algún valor por defecto
-    }
-  }
+  // async getUser(): Promise<void> {
+  //   try {
+  //     const user = await this.storage.get('user');
+  //     this.user = user;
+  //   } catch (error) {
+  //     console.error('Error al obtener el usuario del storage', error);
+  //     this.user = null; // o algún valor por defecto
+  //   }
+  // }
 
   async viewTicket(ticket_id: string) {
 
@@ -275,15 +272,15 @@ export class ScannerPage implements OnInit {
       codeTick = ticket_id;
     }
 
-    const response = this.findOccurrences(this.tickets, codeTick);
+    const response = this.findOccurrences(codeTick);
 
-    if (!response || response.length === 0) {
+    if (!response || (await response).length === 0) {
       this.presentToast('danger', 'Ticket no encontrado', 'No válido para éste evento o actualice los últimos tickets');
       return;
     }
 
     // Para evitar abrir muchos modales simultáneamente, esperamos uno a la vez
-    for (const item of response) {
+    for (const item of await response) {
       item.view = true;
       await this.modalScanner(item);
     }
@@ -312,7 +309,7 @@ export class ScannerPage implements OnInit {
   }
 
   async ngOnInit() {
-     try {
+    try {
       const isAvailable = !!BarcodeScanner.startScan;
       this.isSupported = isAvailable;
       console.log('BarcodeScanner disponible:', isAvailable);
@@ -320,28 +317,58 @@ export class ScannerPage implements OnInit {
       console.error('Error verificando soporte de BarcodeScanner:', error);
       this.isSupported = false;
     }
-  
 
-    await this.localScaned();
-    await this.getTotalTickets();
+
+    //await this.localScaned();
+    //await this.getTotalTickets();
     //this.getHistorialQr();
 
-    await this.storage.create(); // ¡Esto es obligatorio!
-    const saved = await this.storage.get(this.key_event_entered);
-    if (saved) {
-      this.entered = saved;
+    // await this.storage.create(); // ¡Esto es obligatorio!
+    // const saved = await this.storage.get(this.key_event_entered);
+    // if (saved) {
+    //   this.entered = saved;
+    // }
+
+    // setInterval(() => {
+    //   if (!this.isDownloading) {
+    //     this.autoUpdate();
+    //   }
+    //   if (!this.isDownloadingH) {
+    //     this.getHistorial();
+    //   }
+    // }, this.seconds * 1000);
+    Network.addListener('networkStatusChange', async (status) => {
+      if (status.connected) {
+        await this.syncOfflineTickets();
+      }
+    });
+
+    // También intenta sincronizar al abrir si ya hay red
+    const status = await Network.getStatus();
+    if (status.connected) {
+      await this.syncOfflineTickets();
     }
-
-    setInterval(() => {
-      if (!this.isDownloading) {
-        this.autoUpdate();
-      }
-      if (!this.isDownloadingH) {
-        this.getHistorial();
-      }
-    }, this.seconds * 1000);
+    this.route.params.subscribe(async params => {
+      this.event_id = params["event_id"];
+      await this.setTotalTickets();
+      // this.getEnteder();
+      // this.getHistorialOffline();
+    });
   }
+  private async syncOfflineTickets() {
+    await this.sqliteService.syncOfflineScans(async (scans) => {
+      try {
+        // 👇 Aquí llamas tu endpoint real para subir los escaneos
+        await this.eventoService.uploadScannedTickets(scans).toPromise();
 
+        console.log('📡 Escaneos enviados al servidor');
+        return true;
+      } catch (err) {
+        console.error(' Error enviando escaneos:', err);
+        return false;
+      }
+    });
+  }
   maxDate(date1: string, date2: string): string {
     const d1 = new Date(date1);
     const d2 = new Date(date2);
@@ -383,12 +410,17 @@ export class ScannerPage implements OnInit {
 
   async setTotalTickets(): Promise<void> {
     try {
-      const totalTickets = this.tickets.filter(ticket => ticket.ticket_status === 1).length;
-      await this.storage.set(`totalTickets-${this.event_id}`, totalTickets);
+      const result = await this.sqliteService.getTicketsByEvent(this.event_id);
+      const tickets = result.values || [];
+      const totalTickets = tickets.filter((ticket: { ticket_status: number; }) => ticket.ticket_status === 1).length;
+
+      this.totalTickets = totalTickets; // puedes almacenarlo en una variable de clase
+      console.log('🎟️ Total de tickets activos:', totalTickets);
     } catch (error) {
-      console.error('Error setting totalTickets:', error);
+      console.error(' Error calculando totalTickets:', error);
     }
   }
+
 
   async firstDownload(): Promise<void> {
     this.initCounter();
@@ -742,50 +774,103 @@ export class ScannerPage implements OnInit {
     return true;
   }
 
-  findTicket(ticket: any) {
+  async findTicket(ticket: any) {
     let idEvento = '';
     let codeTick = '';
 
-    // ✅ Verificar si es numérico
     const isNumeric = /^\d+$/.test(ticket);
-
     if (isNumeric) {
       codeTick = ticket;
     } else {
       const tt = ticket.toLowerCase();
       const parts = tt.split('-');
-
-      if (parts.length !== 2) {
-        codeTick = tt;
-      } else {
-        [idEvento, codeTick] = parts;
-      }
+      codeTick = parts.length !== 2 ? tt : parts[1];
+      idEvento = parts.length !== 2 ? '' : parts[0];
     }
 
-    console.log('Ticket:', ticket);
-    console.log('Tipo:', isNumeric ? 'numérico' : 'alfanumérico');
-    console.log('codeTick:', codeTick);
-    console.log('idEvento:', idEvento);
+    const isOnline = navigator.onLine;
+    console.log('🔍 Escaneando ticket:', codeTick, 'Online?', isOnline);
 
-    // ✅ Usar función correspondiente según tipo
-    const response = isNumeric
-      ? this.findOccurrences(this.tickets, ticket)
-      : this.findOccurrencesAlfa(this.tickets, codeTick);
+    // 🔹 Verificamos la cantidad total de tickets
+    const totalTickets = await this.sqliteService.countTickets();
+    console.log(`📊 Total de tickets en SQLite: ${totalTickets}`);
+
+    let response: any[] = [];
+
+    if (totalTickets > 70000) {
+      // ⚡ Si hay muchos registros, buscar por codigoCompra
+      console.log('🚀 Modo optimizado: buscando por codigoCompra');
+      response = await this.findOccurrencesByCompra(codeTick);
+    } else {
+      // 🔹 Buscar según tipo (numérico o alfanumérico)
+      response = isNumeric
+        ? await this.findOccurrences(codeTick)
+        : await this.findOccurrencesAlfa(codeTick);
+    }
 
     if (!response || response.length === 0) {
-      this.presentToast('danger', 'Ticket no encontrado', 'No válido para éste evento o actualice los últimos tickets');
+      this.presentToast('danger', 'Ticket no encontrado', 'No válido o necesita actualizar');
       return;
     }
 
     const itemFindTicket = response[0];
-    const isValid = this.check(itemFindTicket);
 
-    if (isValid) {
-      itemFindTicket.checkin--;
-      this.setEnteder(itemFindTicket);
-      this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', itemFindTicket);
+    const alreadyScanned = await this.sqliteService.isTicketScanned(itemFindTicket.ticket_id);
+    if (alreadyScanned) {
+      this.presentToast('danger', 'Ticket duplicado', 'Ya fue escaneado anteriormente');
+      return;
+    }
+
+    const isValid = this.check(itemFindTicket);
+    if (!isValid) return;
+
+    await this.sqliteService.addScannedTicket(itemFindTicket, isOnline);
+
+    itemFindTicket.checkin--;
+    this.setEnteder(itemFindTicket);
+    this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', itemFindTicket);
+  }
+async findOccurrencesByCompra(ticketId: string): Promise<any[]> {
+  try {
+    const db = await this.sqliteService.getDatabase();
+    const query = `
+      SELECT * FROM tickets
+      WHERE codigoCompra = ?
+         OR codeNumericQR = ?
+         OR LOWER(ticket_id) = ?;
+    `;
+    const result = await db.query(query, [ticketId, ticketId, ticketId.toLowerCase()]);
+    console.log('🎯 Resultados por codigoCompra:', result.values?.length || 0);
+    return result.values ?? [];
+  } catch (err) {
+    console.error('❌ Error buscando por codigoCompra:', err);
+    return [];
+  }
+}
+
+  async uploadScannedTickets() {
+    try {
+      const db = await this.sqliteService.getDatabase();
+      const result = await db.query(`SELECT * FROM scanned_tickets WHERE sent = 0;`);
+      const ticketsToUpload = result.values || [];
+
+      for (const ticket of ticketsToUpload) {
+        this.eventoService.checkin(ticket).subscribe({
+          next: async () => {
+            await db.run(`UPDATE scanned_tickets SET sent = 1 WHERE ticket_id = ?;`, [ticket.ticket_id]);
+            console.log(`☁️ Ticket sincronizado: ${ticket.ticket_id}`);
+          },
+          error: (err) => {
+            console.error(' Error subiendo ticket:', err);
+          }
+        });
+      }
+    } catch (err) {
+      console.error(' Error en uploadScannedTickets:', err);
     }
   }
+
+
 
 
   async getEnteder() {
@@ -910,19 +995,48 @@ export class ScannerPage implements OnInit {
     }
   }
 
-  findOccurrences(data: Ticket[], ticketId: string): Ticket[] {
-    return data.filter(item => item.codeNumericQR === ticketId);
-  }
-  findOccurrencesAlfa(data: Ticket[], ticketId: string): Ticket[] {
-    console.log('item en findqr', JSON.stringify(data, null, 2));
-    return data.filter(item => item.ticket_id === ticketId);
+  // 🔹 Busca tickets por codeNumericQR (numéricos)
+  // 🔹 Busca tickets por codeNumericQR (numéricos)
+  async findOccurrences(ticketId: string): Promise<any[]> {
+    try {
+      const db = await this.sqliteService.getDatabase();
+      const query = `SELECT * FROM tickets WHERE codeNumericQR = ?;`;
+      const result = await db.query(query, [ticketId]);
+      return result.values ?? [];
+    } catch (err) {
+      console.error(' Error buscando ticket numérico:', err);
+      return [];
+    }
   }
 
-  findOccurrencesQr(data: Ticket[], ticketQr: string): Ticket[] {
-    const occurrences = data.filter(item => item.codeNumericQR === ticketQr);
-    occurrences.forEach(item => console.log('item en findqr', JSON.stringify(item, null, 2)));
-    return occurrences;
+  // 🔹 Busca tickets por ticket_id (alfanuméricos)
+  async findOccurrencesAlfa(ticketId: string): Promise<any[]> {
+    try {
+      const db = await this.sqliteService.getDatabase();
+      const query = `SELECT * FROM tickets WHERE LOWER(ticket_id) = ?;`;
+      const result = await db.query(query, [ticketId.toLowerCase()]);
+      return result.values ?? [];
+    } catch (err) {
+      console.error(' Error buscando ticket alfanumérico:', err);
+      return [];
+    }
   }
+
+
+  // 🔹 (Opcional) Busca por QR explícito (para compatibilidad)
+  async findOccurrencesQr(_data: any, ticketQr: string): Promise<any[]> {
+    try {
+      const db = await this.sqliteService.getDatabase();
+      const query = `SELECT * FROM tickets WHERE codeNumericQR = ?;`;
+      const result = await db.query(query, [ticketQr]);
+      result.values?.forEach(item => console.log('item en findqr', JSON.stringify(item, null, 2)));
+      return result.values ?? [];
+    } catch (err) {
+      console.error(' Error buscando ticket QR:', err);
+      return [];
+    }
+  }
+
 
   async modalScanner(item: TicketItem) {
     const modal = await this.modalController.create({

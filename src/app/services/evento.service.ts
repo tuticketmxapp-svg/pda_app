@@ -73,6 +73,10 @@ export class EventoService {
   getHistorialQr(id:any) {
     return this.http.get<any>(`${environment.apiUrl}leones/tickets_event/${id}`).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
+  uploadScannedTickets(scans: any[]) {
+  return this.http.post(`${environment}/tickets/sync-scans`, { scans });
+}
+
 }
 
 type Check = 0 | 1;

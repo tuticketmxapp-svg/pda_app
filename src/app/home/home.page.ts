@@ -27,6 +27,7 @@ export interface Ticket {
   sent: number;
   codeNumericQR: string;
   checkin: number;
+  codigoCompra?: string;
 }
 @Component({
   selector: 'app-home',
@@ -38,7 +39,7 @@ export class HomePage {
   user: any;
   eventos: any;
   token: any;
-  
+
   constructor(
     private eventoService: EventoService,
     private navCtrl: NavController,
@@ -59,8 +60,7 @@ export class HomePage {
   }
   async ngOnInit() {
     this.getUpcomingEvents();
-    await this.sqliteService.initDB();
-    
+
   }
   async ionViewWillEnter() {
     this.token = await this.storage.get('access_token');
@@ -93,54 +93,51 @@ export class HomePage {
       this.storage.set('user', data);
     });
   }
-async selectEntrada(event: { accesos: any[]; id: any | string; name: any; }) {
-  let buttons: { text: any; handler: () => Promise<void>; }[] = [];
-console.log('event.id',event.id);
-  event.accesos.forEach(element => {
-    buttons.push({
-      text: element,
-      handler: async () => {
-        // const loading = await this.loadingController.create({
-        //   message: 'Cargando tickets...',
-        // });
-        //await loading.present();
+  async selectEntrada(event: { accesos: any[]; id: any | string; name: any; }) {
+    let buttons: { text: any; handler: () => Promise<void>; }[] = [];
+    console.log('event.id', event.id);
 
-        // Usando subscribe en lugar de toPromise
-        this.eventoService.getTicekts(event.id, '').subscribe({
-          next: async (tickets: Ticket[]) => {
-            try {
-              // Guardar cada ticket en SQLite
-              for (const t of tickets) {
-                await this.sqliteService.addTicket(t);
+    event.accesos.forEach(element => {
+      buttons.push({
+        text: element,
+        handler: async () => {
+          // Inicia la base de datos antes de guardar
+          await this.sqliteService.initEventDB(event.id);
+
+          this.eventoService.getTicekts(event.id, '').subscribe({
+            next: async (tickets: Ticket[]) => {
+              try {
+                // Guardar cada ticket en SQLite
+                for (const t of tickets) {
+                  t.event_id = event.id;
+                  await this.sqliteService.addTicket(t);
+                }
+
+                console.log('✅ Tickets guardados en SQLite');
+
+                // Navegar a scanner pasando el evento, acceso y tickets
+                await this.navCtrl.navigateRoot(['/scanner', event.id], {
+                  queryParams: { name: event.name, acceso: element }
+                });
+              } catch (err) {
+                console.error('Error guardando tickets en SQLite:', err);
               }
-
-              console.log('✅ Tickets guardados en SQLite');
-
-              // Navegar a scanner pasando el evento, acceso y tickets
-              await this.navCtrl.navigateRoot(['/scanner', event.id], { 
-                queryParams: { name: event.name, acceso: element } 
-              });
-            } catch (err) {
-              console.error('Error guardando tickets en SQLite:', err);
-            } finally {
-             // await loading.dismiss();
+            },
+            error: async (error) => {
+              console.error('Error descargando tickets:', error);
             }
-          },
-          error: async (error) => {
-            console.error('Error descargando tickets:', error);
-            //await loading.dismiss();
-          }
-        });
-      }
+          });
+        }
+      });
     });
-  });
 
-  const actionSheet = await this.actionSheetController.create({
-    header: 'Seleccione entrada',
-    buttons
-  });
-  await actionSheet.present();
-}
+    const actionSheet = await this.actionSheetController.create({
+      header: 'Seleccione entrada',
+      buttons
+    });
+    await actionSheet.present();
+  }
+
 
 
 }
