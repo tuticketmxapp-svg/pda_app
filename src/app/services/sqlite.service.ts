@@ -326,5 +326,17 @@ export class SqliteService {
     return 0;
   }
 }
+async clearTickets(): Promise<void> {
+  const db = await this.getDatabase();
+  await db.execute(`DELETE FROM tickets;`);
+  console.log('🗑️ Todos los tickets locales fueron eliminados');
+}
+async getAllTicketIds(): Promise<string[]> {
+  const db = await this.getDatabase();
+  const query = `SELECT ticket_id FROM tickets;`;
+  const result = await db.query(query);
+  return result.values?.map((row: any) => row.ticket_id) ?? [];
+}
+
 
 }
