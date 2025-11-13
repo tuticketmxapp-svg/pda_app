@@ -74,7 +74,7 @@ export class EventoService {
     return this.http.get<any>(`${environment.apiUrl}leones/tickets_event/${id}`).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
   uploadScannedTickets(scans: any[]) {
-  return this.http.post(`${environment}/tickets/sync-scans`, { scans });
+  return this.http.post(`${environment.apiUrl}tickets/sync-scans`, { scans });
 }
 
 }

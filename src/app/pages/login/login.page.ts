@@ -54,7 +54,6 @@ export class LoginPage {
     }
   }
   async login(credentials: any) {
-
     if (this.loadingLogin === false) {
       if (this.loginForm.invalid) {
         const alert = await this.alertCtrl.create({
@@ -66,59 +65,77 @@ export class LoginPage {
         await alert.present();
         return;
       }
+
       this.loadingLogin = true;
       const loading = await this.loadingCtrl.create({
         mode: 'ios',
         message: 'Loading',
       });
       await loading.present();
-      this.authService.login(credentials).subscribe(async result => {
-        console.log('result',result);
-        this.loadingLogin = false;
-        await loading.dismiss();
-        if (result) {
-          await this.navCtrl.navigateForward('/home');
-          return;
-        } else {
+
+      this.authService.login(credentials).subscribe(
+        async (result) => {
+          console.log('result', result);
+          this.loadingLogin = false;
+          await loading.dismiss();
+
+          if (result && result.user) {
+            // 👇 Guardar los datos del usuario logueado en localStorage
+            localStorage.setItem('userData', JSON.stringify(result.user));
+
+            // Opcional: también puedes guardar el token si viene en la respuesta
+            if (result.token) {
+              localStorage.setItem('token', result.token);
+            }
+
+            // ✅ Navegar al home
+            await this.navCtrl.navigateForward('/home');
+            return;
+          } else {
+            const alert = await this.alertCtrl.create({
+              mode: 'ios',
+              header: result.title || 'Error',
+              message: result.message || 'No se pudo iniciar sesión',
+              buttons: ['Aceptar']
+            });
+            await alert.present();
+          }
+        },
+        async (error) => {
+          console.log('error', error);
+          await loading.dismiss();
+          this.loadingLogin = false;
+
+          let title = '';
+          let message = '';
+
+          if (error.status != 0) {
+            const responseObject = error.error;
+            title = 'Error al iniciar sesión';
+            for (const key in responseObject) {
+              if (responseObject.hasOwnProperty(key)) {
+                message += `${key}: ${responseObject[key]}\n`;
+              }
+            }
+          } else {
+            title = 'Error de conexión';
+            message = 'Parece que hay un problema con la conexión a internet, revise su conexión.';
+          }
+
           const alert = await this.alertCtrl.create({
             mode: 'ios',
-            header: result.title,
-            message: result.message,
+            header: title,
+            message: message,
             buttons: ['Aceptar']
           });
           await alert.present();
         }
-      }, async error => {
-        console.log('error',error);
-        loading.dismiss();
-        this.loadingLogin = false;
-        let title = '';
-        let message = '';
-        if (error.status != 0) {
-          const responseObject = error.error;
-          title = "Error al iniciar sesión"
-          for (const key in responseObject) {
-            if (responseObject.hasOwnProperty(key)) {
-              message += `${key}: ${responseObject[key]}\n`;
-            }
-          }
-        } else {
-          title = "Error de conexión"
-          message = "Parece que hay un problem a con la conexión de internet, revise su conexión"
-        }
-        const alert = await this.alertCtrl.create({
-          mode: 'ios',
-          header: title,
-          message: message,
-          buttons: ['Aceptar']
-        });
-        await alert.present();
-      });
+      );
+
       this.mostrarForm = false;
     }
-
-
   }
+
 
   showHideLog(invalue: string) {
     if (invalue == 'in') {

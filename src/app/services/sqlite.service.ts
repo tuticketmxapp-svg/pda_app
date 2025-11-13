@@ -117,44 +117,41 @@ export class SqliteService {
     }
   }
 
-  // Verifica o crea tabla de escaneos
-  async ensureTablesExist() {
-    if (!this.db) {
-      console.warn('⚠️ Base de datos aún no inicializada, inicializando...');
-      await this.initDB();
-    }
-
-    const result = await this.db!.query(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name='scanned_tickets';
-    `);
-
-    const exists = result.values && result.values.length > 0;
-
-    if (!exists) {
-      console.log('🆕 Creando tabla scanned_tickets...');
-      await this.db!.run(`
-        CREATE TABLE IF NOT EXISTS scanned_tickets (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ticket_id TEXT,
-          codeNumericQR TEXT,
-          acceso TEXT,
-          numeroOrden INTEGER,
-          evento_id TEXT,
-          username TEXT,
-          fecha_lectura TEXT,
-          created_at TEXT,
-          updated_at TEXT,
-          sent INTEGER DEFAULT 0,
-          offline INTEGER DEFAULT 0,
-          online INTEGER DEFAULT 0,
-          UNIQUE(ticket_id)
-        );
-      `);
-      console.log(' Tabla scanned_tickets creada correctamente');
-    } else {
-      console.log('📦 Tabla scanned_tickets ya existe');
-    }
+// Verifica o crea tabla de escaneos
+async ensureTablesExist() {
+  if (!this.db) {
+    console.warn('⚠️ Base de datos aún no inicializada, inicializando...');
+    await this.initDB();
   }
+
+  // 🧹 Eliminar la tabla anterior si existía
+  console.log('🗑️ Eliminando tabla scanned_tickets anterior (si existe)...');
+  await this.db!.run(`DROP TABLE IF EXISTS scanned_tickets;`);
+
+  // 🆕 Crear la tabla nuevamente con la columna codigoCompra incluida
+  console.log('🆕 Creando tabla scanned_tickets con nueva estructura...');
+  await this.db!.run(`
+    CREATE TABLE IF NOT EXISTS scanned_tickets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id TEXT,
+      codeNumericQR TEXT,
+      acceso TEXT,
+      numeroOrden INTEGER,
+      evento_id TEXT,
+      username TEXT,
+      fecha_lectura TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      sent INTEGER DEFAULT 0,
+      offline INTEGER DEFAULT 0,
+      online INTEGER DEFAULT 0,
+      codigoCompra TEXT,
+      UNIQUE(ticket_id)
+    );
+  `);
+
+  console.log('✅ Tabla scanned_tickets recreada correctamente con codigoCompra');
+}
 
   // Inserta un ticket normal
   async addTicket(ticket: any) {
@@ -179,7 +176,7 @@ export class SqliteService {
           ticket.acceso,
           ticket.numeroOrden,
           ticket.evento_id,
-          ticket.username,
+          ticket.nombre,
           ticket.fecha_lectura,
           ticket.created_at,
           ticket.updated_at,
@@ -190,7 +187,7 @@ export class SqliteService {
         ]
       );
 
-      console.log(' Ticket insertado correctamente:', ticket?.ticket_id || '(sin id)');
+      console.log(' Ticket insertado correctamente:', ticket?.codigoCompra || '(sin id)');
     } catch (err) {
       console.error(' Error insertando ticket:', err);
     }
@@ -272,6 +269,49 @@ export class SqliteService {
       //  Obtener todos los escaneos pendientes (offline)
       const result = await db.query(`
       SELECT * FROM scanned_tickets WHERE offline = 1 AND sent = 0;
+    `);
+
+      const scans = result.values ?? [];
+
+      if (scans.length === 0) {
+        console.log(' No hay escaneos offline pendientes por sincronizar');
+        return;
+      }
+
+      console.log(`📤 Sincronizando ${scans.length} escaneos offline...`);
+
+      //  Enviar al servidor (tu función la maneja)
+      const success = await uploadFn(scans);
+
+      if (!success) {
+        console.warn('⚠️ La sincronización falló, reintentará más tarde');
+        return;
+      }
+
+      //Marcar como enviados
+      const ids = scans.map(s => s.ticket_id);
+      const placeholders = ids.map(() => '?').join(',');
+
+      await db.run(
+        `UPDATE scanned_tickets 
+       SET sent = 1, offline = 0, online = 1 
+       WHERE ticket_id IN (${placeholders});`,
+        ids
+      );
+
+      console.log(` Escaneos sincronizados correctamente (${scans.length})`);
+    } catch (err) {
+      console.error(' Error durante la sincronización offline:', err);
+    }
+  }
+
+    async syncScans(uploadFn: (scans: any[]) => Promise<boolean>): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+
+      //  Obtener todos los escaneos pendientes (offline)
+      const result = await db.query(`
+      SELECT * FROM scanned_tickets WHERE sent = 0;
     `);
 
       const scans = result.values ?? [];

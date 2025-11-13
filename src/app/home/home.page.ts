@@ -94,6 +94,8 @@ export class HomePage {
     });
   }
   async selectEntrada(event: { accesos: any[]; id: any | string; name: any; }) {
+    const db = await this.sqliteService.getDatabase();
+    await db.run('DELETE FROM tickets;');
     let buttons: { text: any; handler: () => Promise<void>; }[] = [];
     console.log('event.id', event.id);
 
@@ -103,6 +105,13 @@ export class HomePage {
         handler: async () => {
           // Inicia la base de datos antes de guardar
           await this.sqliteService.initEventDB(event.id);
+
+          // Mostrar loading
+          const loading = await this.loadingCtrl.create({
+            mode: 'ios',
+            message: 'Cargando boletos...',
+          });
+          await loading.present();
 
           this.eventoService.getTicekts(event.id, '').subscribe({
             next: async (tickets: Ticket[]) => {
@@ -115,16 +124,22 @@ export class HomePage {
 
                 console.log('✅ Tickets guardados en SQLite');
 
+                // Cerrar loading antes de navegar
+                await loading.dismiss();
+
                 // Navegar a scanner pasando el evento, acceso y tickets
                 await this.navCtrl.navigateRoot(['/scanner', event.id], {
                   queryParams: { name: event.name, acceso: element }
                 });
+
               } catch (err) {
                 console.error('Error guardando tickets en SQLite:', err);
+                await loading.dismiss();
               }
             },
             error: async (error) => {
               console.error('Error descargando tickets:', error);
+              await loading.dismiss();
             }
           });
         }
@@ -137,6 +152,7 @@ export class HomePage {
     });
     await actionSheet.present();
   }
+
 
 
 

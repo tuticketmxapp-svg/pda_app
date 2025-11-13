@@ -403,3 +403,41 @@ ion-popover [popover]:not(:popover-open):not(dialog[open]) {
 .ghost-card{
     padding-bottom: 250px;
 }
+.custom-toast-success {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  background-color: #28a745;
+  color: #fff;
+  text-align: center;
+  border-radius: 15px;
+  padding: 20px;
+  width: 85%;
+  max-width: 380px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: all 0.3s ease-in-out;
+  z-index: 9999;
+}
+
+.custom-toast-success.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.custom-toast-success .toast-content h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.custom-toast-success .toast-content p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.custom-toast-success .toast-info {
+  font-size: 15px;
+  margin-top: 10px;
+}

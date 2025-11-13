@@ -72,7 +72,11 @@ export class ScannerPage implements OnInit {
      lifecycle
      --------------------------- */
   async ngOnInit() {
-    // Detect soporte del plugin (seguro fallback)
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      this.user = JSON.parse(userData);
+      console.log('Usuario cargado:', this.user);
+    }
     this.isSupported = !!BarcodeScanner.startScan;
     console.log('BarcodeScanner disponible:', this.isSupported);
 
@@ -130,6 +134,7 @@ export class ScannerPage implements OnInit {
      --------------------------- */
   @HostListener('document:keypress', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
+    console.log('entre a escaneo')
     const key = event.key;
     if (key === 'Enter') {
       const code = this.codeBuffer.trim();
@@ -210,6 +215,7 @@ export class ScannerPage implements OnInit {
      Find Ticket -> busca en sqlite y maneja lógica
      --------------------------- */
   async findTicket(ticket: any) {
+    console.log('entre a findTicket despues de escaeo', ticket);
     let codeTick = '';
     let idEvento = '';
 
@@ -225,14 +231,14 @@ export class ScannerPage implements OnInit {
     }
 
     const isOnline = (await Network.getStatus()).connected;
-    console.log('🔍 Escaneando ticket:', codeTick, 'Online?', isOnline);
+    console.log('scaneando ticket:', codeTick, 'Online?', isOnline);
 
     // decidir estrategia de búsqueda según cantidad registros
     let response: any[] = [];
     try {
       const totalTickets = await this.sqliteService.countTickets?.() ?? 0;
       console.log('Total tickets en SQLite:', totalTickets);
-      if (totalTickets > 70000) {
+      if (totalTickets > 8000) {
         console.log('Modo optimizado: buscar por codigoCompra / qr / ticket_id');
         response = await this.findOccurrencesByCompra(codeTick);
       } else {
@@ -279,10 +285,40 @@ export class ScannerPage implements OnInit {
     // decrementar creditos locales y registrar (upload o local)
     itemFindTicket.checkin = (itemFindTicket.checkin ?? 1) - 1;
     this.setEnteder(itemFindTicket);
-    this.presentToast('success', 'Acceso Permitido', 'Permitir entrada al evento', itemFindTicket);
+    console.log('Evalores de tickets escaeados', JSON.stringify(itemFindTicket, null, 2));
+
+    await this.presentToastSuccess(itemFindTicket);
     await this.sqliteService.addScannedTicket(itemFindTicket, isOnline);
     await this.loadScannedTickets();
   }
+  async presentToastSuccess(ticket: any) {
+    // Crear contenedor del toast
+    const toastEl = document.createElement('div');
+    toastEl.classList.add('custom-toast-success');
+
+    toastEl.innerHTML = `
+    <div class="toast-content">
+      <h2>✅ ACCESO PERMITIDO</h2>
+      <p>Permitir entrada al evento</p>
+      <div class="toast-info">
+        <strong>Evento:</strong> ${ticket.event_id || 'N/D'} <br>
+        <strong>Usuario:</strong> ${ticket.nombre || 'N/D'}
+      </div>
+    </div>
+  `;
+
+    document.body.appendChild(toastEl);
+
+    // Mostrar con animación
+    setTimeout(() => toastEl.classList.add('show'), 50);
+
+    // Ocultar automáticamente
+    setTimeout(() => {
+      toastEl.classList.remove('show');
+      setTimeout(() => toastEl.remove(), 500);
+    }, 4000);
+  }
+
 
   /* ---------------------------
      DB lookup helpers
@@ -310,22 +346,23 @@ export class ScannerPage implements OnInit {
   }
 
   // búsqueda optimizada cuando hay > 70k registros
-async findOccurrencesByCompra(codigoCompra: string): Promise<any[]> {
-  try {
-    const db = await this.sqliteService.getDatabase();
-    const query = `
+  async findOccurrencesByCompra(codigoCompra: string): Promise<any[]> {
+    console.log('codigoCompra', codigoCompra);
+    try {
+      const db = await this.sqliteService.getDatabase();
+      const query = `
       SELECT * FROM tickets
       WHERE codigoCompra = ?;
     `;
-    const result = await db.query(query, [codigoCompra]);
+      const result = await db.query(query, [codigoCompra]);
 
-    console.log('🎟️ Resultados por codigoCompra:', result.values?.length || 0);
-    return result.values ?? [];
-  } catch (err) {
-    console.error('❌ Error buscando por codigoCompra:', err);
-    return [];
+      console.log('🎟️ Resultados por codigoCompra:', result.values?.length || 0);
+      return result.values ?? [];
+    } catch (err) {
+      console.error('❌ Error buscando por codigoCompra:', err);
+      return [];
+    }
   }
-}
 
 
   /* ---------------------------
@@ -378,16 +415,18 @@ async findOccurrencesByCompra(codigoCompra: string): Promise<any[]> {
 
   // Subir pendientes (usa tu servicio/sqliteService)
   async syncOfflineTickets() {
+
     // si tu SqliteService tiene syncOfflineScans(callback) úsalo (más eficiente)
     try {
       if (typeof this.sqliteService.syncOfflineScans === 'function') {
         await this.sqliteService.syncOfflineScans(async (scans) => {
+          console.log('Enviando a sync-scans:', JSON.stringify(scans, null, 2));
           try {
             await this.eventoService.uploadScannedTickets(scans).toPromise();
             console.log('Escaneos enviados al servidor (via sqliteService)');
             return true;
           } catch (err) {
-            console.error('Error enviando escaneos:', err);
+            console.error('Error subiendo scanned ticket:', JSON.stringify(err, null, 2));
             return false;
           }
         });
@@ -510,107 +549,126 @@ async findOccurrencesByCompra(codigoCompra: string): Promise<any[]> {
       await this.modalScanner(item);
     }
   }
-  goBack() {
+  async goBack() {
+    const db = await this.sqliteService.getDatabase();
+    await db.run('DELETE FROM tickets;');
     this.navCtrl.back();
   }
-async actionSheet() {
-  const buttons = [
-    {
-      text: "Subir escaneos pendientes",
-      handler: async () => {
-        await this.syncOfflineTickets();
+  async actionSheet() {
+    const buttons = [
+      {
+        text: "Subir escaneos pendientes",
+        handler: async () => {
+          await this.syncOfflineTickets();
+        }
+      },
+      {
+        text: "Descargar todo de nuevo",
+        handler: async () => {
+          await this.firstDownload();
+        }
+      },
+      {
+        text: "Actualizar (nuevas ventas)",
+        handler: async () => {
+          await this.syncTickets();
+        }
+      },
+      {
+        text: "Cancelar",
+        role: "cancel"
       }
-    },
-    {
-      text: "Descargar todo de nuevo",
-      handler: async () => {
-        await this.firstDownload();
-      }
-    },
-    {
-      text: "Actualizar (nuevas ventas)",
-      handler: async () => {
-        await this.syncTickets();
-      }
-    },
-    {
-      text: "Cancelar",
-      role: "cancel"
-    }
-  ];
+    ];
 
-  const actionSheet = await this.actionSheetController.create({
-    header: 'Seleccione una opción',
-    buttons
-  });
-  await actionSheet.present();
-}
-
-async firstDownload(): Promise<void> {
-  const loading = await this.loadingCtrl.create({
-    mode: 'ios',
-    message: 'Descargando todos los tickets...',
-  });
-
-  await loading.present();
-
-  try {
-    // 1. Eliminar los tickets locales
-    await this.sqliteService.clearTickets();
-
-    // 2. Descargar todos los tickets del evento
-    const tickets = await this.eventoService.getTicekts(this.event_id, '').toPromise();
-
-    // 3. Guardar en SQLite
-    for (const t of tickets) {
-      t.event_id = this.event_id;
-      await this.sqliteService.addTicket(t);
-    }
-
-    console.log('✅ Todos los tickets descargados y guardados');
-    this.presentToast('success', 'Descarga completa', `${tickets.length} tickets almacenados`);
-
-  } catch (err) {
-    console.error('Error en firstDownload:', err);
-    this.presentToast('danger', 'Error', 'No se pudieron descargar los tickets');
-  } finally {
-    await loading.dismiss();
+    const actionSheet = await this.actionSheetController.create({
+      header: 'Seleccione una opción',
+      buttons
+    });
+    await actionSheet.present();
   }
-}
 
-async syncTickets() {
-  const loading = await this.loadingCtrl.create({
-    mode: 'ios',
-    message: 'Buscando nuevos tickets...',
-  });
+  async firstDownload(): Promise<void> {
+    const loading = await this.loadingCtrl.create({
+      mode: 'ios',
+      message: 'Descargando todos los tickets...',
+    });
 
-  await loading.present();
+    await loading.present();
 
-  try {
-    // Obtener todos los ticket_id locales
-    const localIds = await this.sqliteService.getAllTicketIds();
+    try {
+      // 1. Eliminar los tickets locales
+      await this.sqliteService.clearTickets();
 
-    // Solicitar al backend solo los que no existan
-    const newTickets = await this.eventoService.getTicekts(this.event_id, localIds).toPromise();
+      // 2. Descargar todos los tickets del evento
+      const tickets = await this.eventoService.getTicekts(this.event_id, '').toPromise();
 
-    if (newTickets && newTickets.length > 0) {
-      for (const t of newTickets) {
+      // 3. Guardar en SQLite
+      for (const t of tickets) {
         t.event_id = this.event_id;
         await this.sqliteService.addTicket(t);
       }
 
-      console.log('🆕 Nuevos tickets añadidos:', newTickets.length);
-      this.presentToast('success', 'Actualización', `${newTickets.length} nuevos tickets añadidos`);
-    } else {
-      this.presentToast('medium', 'Sin cambios', 'No hay nuevos tickets');
-    }
-  } catch (error) {
-    console.error('Error al sincronizar tickets:', error);
-    this.presentToast('danger', 'Error', 'No se pudo sincronizar con el servidor');
-  } finally {
-    await loading.dismiss();
-  }
-}
+      console.log('✅ Todos los tickets descargados y guardados');
+      this.presentToast('success', 'Descarga completa', `${tickets.length} tickets almacenados`);
 
+    } catch (err) {
+      console.error('Error en firstDownload:', err);
+      this.presentToast('danger', 'Error', 'No se pudieron descargar los tickets');
+    } finally {
+      await loading.dismiss();
+    }
+  }
+
+  async syncTickets() {
+    const loading = await this.loadingCtrl.create({
+      mode: 'ios',
+      message: 'Buscando nuevos tickets...',
+    });
+
+    await loading.present();
+
+    try {
+      // Obtener todos los ticket_id locales
+      const localIds = await this.sqliteService.getAllTicketIds();
+
+      // Solicitar al backend solo los que no existan
+      const newTickets = await this.eventoService.getTicekts(this.event_id, localIds).toPromise();
+
+      if (newTickets && newTickets.length > 0) {
+        for (const t of newTickets) {
+          t.event_id = this.event_id;
+          await this.sqliteService.addTicket(t);
+        }
+
+        console.log('🆕 Nuevos tickets añadidos:', newTickets.length);
+        this.presentToast('success', 'Actualización', `${newTickets.length} nuevos tickets añadidos`);
+      } else {
+        this.presentToast('medium', 'Sin cambios', 'No hay nuevos tickets');
+      }
+    } catch (error) {
+      console.error('Error al sincronizar tickets:', error);
+      this.presentToast('danger', 'Error', 'No se pudo sincronizar con el servidor');
+    } finally {
+      await loading.dismiss();
+    }
+  }
+
+  async saveTicketsToSQLite(tickets: any[]) {
+    const db = await this.sqliteService.getDatabase();
+
+    // Limpia la tabla antes de volver a insertar
+    await db.run('DELETE FROM tickets;');
+
+    const insertQuery = `
+    INSERT INTO tickets (ticket_id, codigoCompra, evento_id, checkin, ...)
+    VALUES (?, ?, ?, ?, ...);
+  `;
+
+    for (const t of tickets) {
+      await db.run(insertQuery, [t.ticket_id, t.codigoCompra, t.evento_id, t.checkin /* ... */]);
+    }
+
+    console.log(`Se insertaron ${tickets.length} tickets`);
+  }
 
 }

@@ -79,6 +79,11 @@ export class AppComponent {
         this.location.back();
       }
     });
+    // this.platform.ready().then(async () => {
+    //   console.log('🧹 Limpiando tickets al iniciar app...');
+    //   const db = await this.sqliteService.getDatabase();
+    //   await db.run('DELETE FROM tickets;');
+    // });
   }
 
   showExitConfirm() {
