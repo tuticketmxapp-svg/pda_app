@@ -43,7 +43,6 @@ export class AppComponent {
 
   async ngOnInit() {
     await this.storage.create();
-    console.log('🔄 Inicializando SQLite...');
     await this.sqliteService.initDB();
   }
 
@@ -79,11 +78,6 @@ export class AppComponent {
         this.location.back();
       }
     });
-    // this.platform.ready().then(async () => {
-    //   console.log('🧹 Limpiando tickets al iniciar app...');
-    //   const db = await this.sqliteService.getDatabase();
-    //   await db.run('DELETE FROM tickets;');
-    // });
   }
 
   showExitConfirm() {

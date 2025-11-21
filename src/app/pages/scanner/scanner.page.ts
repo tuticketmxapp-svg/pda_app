@@ -27,6 +27,7 @@ interface Ticket {
   numeroOrden?: any;
   event_id?: any;
   evento_id?: any;
+  codigoCompra: any;
 }
 
 @Component({
@@ -54,6 +55,8 @@ export class ScannerPage implements OnInit {
   LIMIT2 = 50; // para lista 'online'
   LIMIT3 = 50; // para lista 'historial'
   escaneados: any[] = [];
+  modo: any;
+  enclosure_id = '';
   constructor(
     private route: ActivatedRoute,
     private navCtrl: NavController,
@@ -72,13 +75,12 @@ export class ScannerPage implements OnInit {
      lifecycle
      --------------------------- */
   async ngOnInit() {
-    const userData = localStorage.getItem('userData');
-    if (userData) {
-      this.user = JSON.parse(userData);
-      console.log('Usuario cargado:', this.user);
+    const rawUserData = localStorage.getItem('userData');
+
+    if (rawUserData) {
+      this.user = JSON.parse(localStorage.getItem('userData') ?? 'null');
     }
     this.isSupported = !!BarcodeScanner.startScan;
-    console.log('BarcodeScanner disponible:', this.isSupported);
 
     // escuchar cambios de red para sincronizar offline scans
     Network.addListener('networkStatusChange', async (status) => {
@@ -94,17 +96,27 @@ export class ScannerPage implements OnInit {
     }
 
     // Params — cuando se navega desde home con event_id
-    this.route.params.subscribe(async params => {
-      this.event_id = params['event_id'];
-      // inicializar DB para el evento (crea tablas / indices si es necesario)
+    //    this.route.params.subscribe( params => {
+    //   this.event_id = params['event_id'];
+    // });
+
+    this.route.queryParams.subscribe(async query => {
+      this.modo = query['mode'];
+      this.enclosure_id = query['enclosure'];
+      this.event_id = query['event_id'];
       try {
-        if (this.event_id) {
-          await this.sqliteService.initEventDB?.(this.event_id); // initEventDB es recomendado
+        if (this.event_id && this.modo == 'evento') {
+          await this.sqliteService.initEventDB?.(this.event_id);
           await this.setTotalTickets();
-          await this.getEnteder(); // cargar entered desde storage si lo usas
+          await this.getEnteder();
+        }
+
+        if (this.modo == 'enclosure') {
+          await this.sqliteService.initEventDB?.(this.event_id);
+          await this.setTotalTicketsEnclosure();
+          await this.getEnteder();
         }
       } catch (err) {
-        console.error('Error inicializando DB o cargando contadores:', err);
       }
     });
 
@@ -123,9 +135,7 @@ export class ScannerPage implements OnInit {
       const db = await this.sqliteService.getDatabase();
       const result = await db.query(`SELECT * FROM scanned_tickets ORDER BY id DESC;`);
       this.escaneados = result.values ?? [];
-      console.log(`🟢 Escaneados cargados: ${this.escaneados.length}`);
     } catch (err) {
-      console.error('❌ Error cargando escaneados:', err);
       this.escaneados = [];
     }
   }
@@ -134,7 +144,6 @@ export class ScannerPage implements OnInit {
      --------------------------- */
   @HostListener('document:keypress', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
-    console.log('entre a escaneo')
     const key = event.key;
     if (key === 'Enter') {
       const code = this.codeBuffer.trim();
@@ -172,7 +181,6 @@ export class ScannerPage implements OnInit {
         // @ts-ignore
         await BarcodeScanner.checkPermission?.({ force: true });
       } catch (permErr) {
-        console.warn('checkPermission no disponible o falló:', permErr);
       }
 
       // hideBackground puede no estar implementado en Android plugin -> try/catch
@@ -180,7 +188,6 @@ export class ScannerPage implements OnInit {
         await BarcodeScanner.hideBackground?.();
         document.body.classList.add('scanner-active');
       } catch (hideErr) {
-        console.warn('hideBackground no implementado o falló:', hideErr);
       }
 
       // iniciar escaneo
@@ -191,19 +198,15 @@ export class ScannerPage implements OnInit {
         await BarcodeScanner.showBackground?.();
         document.body.classList.remove('scanner-active');
       } catch (showErr) {
-        console.warn('showBackground no implementado o falló:', showErr);
       }
 
       if (result && result.hasContent) {
         const scanned = result.content;
-        console.log('Código escaneado:', scanned);
         await this.findTicket(scanned);
       } else {
-        console.log('No se detectó ningún código');
         // opcional: mostrar toast
       }
     } catch (err) {
-      console.error('❌ Error en cameraScan:', err);
       await this.presentErrorAlert('Scan error', 'Ocurrió un error al escanear. Intenta de nuevo.');
       // Asegurar que UI vuelva a estado normal
       try { document.body.classList.remove('scanner-active'); } catch { }
@@ -215,7 +218,6 @@ export class ScannerPage implements OnInit {
      Find Ticket -> busca en sqlite y maneja lógica
      --------------------------- */
   async findTicket(ticket: any) {
-    console.log('entre a findTicket despues de escaeo', ticket);
     let codeTick = '';
     let idEvento = '';
 
@@ -231,23 +233,18 @@ export class ScannerPage implements OnInit {
     }
 
     const isOnline = (await Network.getStatus()).connected;
-    console.log('scaneando ticket:', codeTick, 'Online?', isOnline);
-
-    // decidir estrategia de búsqueda según cantidad registros
     let response: any[] = [];
     try {
       const totalTickets = await this.sqliteService.countTickets?.() ?? 0;
-      console.log('Total tickets en SQLite:', totalTickets);
-      if (totalTickets > 8000) {
-        console.log('Modo optimizado: buscar por codigoCompra / qr / ticket_id');
+      if (this.modo == 'enclosure') {
         response = await this.findOccurrencesByCompra(codeTick);
       } else {
+
         response = isNumeric
           ? await this.findOccurrences(codeTick)
           : await this.findOccurrencesAlfa(codeTick);
       }
     } catch (err) {
-      console.error('Error al decidir estrategia de búsqueda:', err);
       this.presentToast('danger', 'Error interno', 'No fue posible realizar la búsqueda');
       return;
     }
@@ -258,7 +255,8 @@ export class ScannerPage implements OnInit {
     }
 
     const itemFindTicket: Ticket = response[0];
-
+    localStorage.setItem('itemFindTicket', JSON.stringify(itemFindTicket));
+    localStorage.setItem('usuario', JSON.stringify(this.user));
     // verificar duplicado en tabla scanned_tickets
     try {
       const alreadyScanned = await this.sqliteService.isTicketScanned(itemFindTicket.ticket_id);
@@ -267,8 +265,6 @@ export class ScannerPage implements OnInit {
         return;
       }
     } catch (err) {
-      console.error('Error verificando si ticket ya fue escaneado:', err);
-      // seguir adelante (mejor un falso positivo que bloquear)
     }
 
     // validar reglas de acceso
@@ -279,14 +275,11 @@ export class ScannerPage implements OnInit {
     try {
       await this.sqliteService.addScannedTicket(itemFindTicket, isOnline);
     } catch (err) {
-      console.error('Error guardando escaneo en scanned_tickets:', err);
     }
 
     // decrementar creditos locales y registrar (upload o local)
     itemFindTicket.checkin = (itemFindTicket.checkin ?? 1) - 1;
     this.setEnteder(itemFindTicket);
-    console.log('Evalores de tickets escaeados', JSON.stringify(itemFindTicket, null, 2));
-
     await this.presentToastSuccess(itemFindTicket);
     await this.sqliteService.addScannedTicket(itemFindTicket, isOnline);
     await this.loadScannedTickets();
@@ -299,10 +292,11 @@ export class ScannerPage implements OnInit {
     toastEl.innerHTML = `
     <div class="toast-content">
       <h2>✅ ACCESO PERMITIDO</h2>
-      <p>Permitir entrada al evento</p>
+      <p>Permitir canje de Boletos</p>
       <div class="toast-info">
-        <strong>Evento:</strong> ${ticket.event_id || 'N/D'} <br>
-        <strong>Usuario:</strong> ${ticket.nombre || 'N/D'}
+        <strong>Evento:</strong> ${ticket.nameEvent || 'N/D'} <br>
+        <strong>Número de Orden</strong>${ticket.numeroOrden || 'N/D'} <br>
+        <strong>Usuario:</strong> ${ticket.username || 'N/D'}
       </div>
     </div>
   `;
@@ -329,7 +323,6 @@ export class ScannerPage implements OnInit {
       const result = await db.query(`SELECT * FROM tickets WHERE codeNumericQR = ?;`, [ticketId]);
       return result.values ?? [];
     } catch (err) {
-      console.error('Error buscando ticket numérico:', err);
       return [];
     }
   }
@@ -340,14 +333,12 @@ export class ScannerPage implements OnInit {
       const result = await db.query(`SELECT * FROM tickets WHERE LOWER(ticket_id) = ?;`, [ticketId.toLowerCase()]);
       return result.values ?? [];
     } catch (err) {
-      console.error('Error buscando ticket alfanumérico:', err);
       return [];
     }
   }
 
   // búsqueda optimizada cuando hay > 70k registros
   async findOccurrencesByCompra(codigoCompra: string): Promise<any[]> {
-    console.log('codigoCompra', codigoCompra);
     try {
       const db = await this.sqliteService.getDatabase();
       const query = `
@@ -356,10 +347,8 @@ export class ScannerPage implements OnInit {
     `;
       const result = await db.query(query, [codigoCompra]);
 
-      console.log('🎟️ Resultados por codigoCompra:', result.values?.length || 0);
       return result.values ?? [];
     } catch (err) {
-      console.error('❌ Error buscando por codigoCompra:', err);
       return [];
     }
   }
@@ -374,7 +363,6 @@ export class ScannerPage implements OnInit {
       const stored = await (this.sqliteService as any).getEnteredFromStorage?.() ?? null;
       if (Array.isArray(stored)) this.entered = stored;
     } catch (err) {
-      console.warn('No se pudo cargar entered desde storage (opcional):', err);
       this.entered = [];
     }
   }
@@ -385,8 +373,9 @@ export class ScannerPage implements OnInit {
       ticket_id: item.ticket_id,
       acceso: item.acceso,
       numeroOrden: item.numeroOrden,
-      evento_id: this.event_id,
+      evento_id: item.event_id,
       username: this.user?.username ?? 'sin_usuario',
+      userid: this.user?.id ?? 'sin_usuario',
       fecha_lectura: dt,
       created_at: dt,
       updated_at: dt,
@@ -396,9 +385,9 @@ export class ScannerPage implements OnInit {
       ticket_status: 1,
       event_id: this.event_id,
       codeNumericQR: item.codeNumericQR || '0',
-      checkin: 0
+      checkin: 0,
+      codigoCompra: item.codigoCompra
     };
-
     // intento subir en tiempo real; si falla, lo guardo local/entered
     this.eventoService.checkin(data).subscribe({
       next: async () => {
@@ -420,13 +409,14 @@ export class ScannerPage implements OnInit {
     try {
       if (typeof this.sqliteService.syncOfflineScans === 'function') {
         await this.sqliteService.syncOfflineScans(async (scans) => {
-          console.log('Enviando a sync-scans:', JSON.stringify(scans, null, 2));
+          scans = scans.map(s => ({
+            ...s,
+            username: this.user.username
+          }));
           try {
             await this.eventoService.uploadScannedTickets(scans).toPromise();
-            console.log('Escaneos enviados al servidor (via sqliteService)');
             return true;
           } catch (err) {
-            console.error('Error subiendo scanned ticket:', JSON.stringify(err, null, 2));
             return false;
           }
         });
@@ -442,11 +432,9 @@ export class ScannerPage implements OnInit {
           await this.eventoService.checkin(t).toPromise();
           await db.run(`UPDATE scanned_tickets SET sent = 1 WHERE ticket_id = ?;`, [t.ticket_id]);
         } catch (err) {
-          console.error('Error subiendo scanned ticket:', err);
         }
       }
     } catch (err) {
-      console.error('Error en syncOfflineTickets:', err);
     }
   }
 
@@ -484,9 +472,15 @@ export class ScannerPage implements OnInit {
       const tickets = result.values || [];
       const totalTickets = tickets.filter((t: any) => t.ticket_status === 1).length;
       this.totalTickets = totalTickets;
-      console.log('🎟️ Total de tickets activos:', totalTickets);
     } catch (err) {
-      console.error('Error calculando totalTickets:', err);
+    }
+  }
+  async setTotalTicketsEnclosure(): Promise<void> {
+    try {
+      const total = await this.sqliteService.getTicketsByEnclosure(this.enclosure_id);
+
+      this.totalTickets = total;
+    } catch (err) {
     }
   }
 
@@ -608,11 +602,9 @@ export class ScannerPage implements OnInit {
         await this.sqliteService.addTicket(t);
       }
 
-      console.log('✅ Todos los tickets descargados y guardados');
       this.presentToast('success', 'Descarga completa', `${tickets.length} tickets almacenados`);
 
     } catch (err) {
-      console.error('Error en firstDownload:', err);
       this.presentToast('danger', 'Error', 'No se pudieron descargar los tickets');
     } finally {
       await loading.dismiss();
@@ -640,13 +632,11 @@ export class ScannerPage implements OnInit {
           await this.sqliteService.addTicket(t);
         }
 
-        console.log('🆕 Nuevos tickets añadidos:', newTickets.length);
         this.presentToast('success', 'Actualización', `${newTickets.length} nuevos tickets añadidos`);
       } else {
         this.presentToast('medium', 'Sin cambios', 'No hay nuevos tickets');
       }
     } catch (error) {
-      console.error('Error al sincronizar tickets:', error);
       this.presentToast('danger', 'Error', 'No se pudo sincronizar con el servidor');
     } finally {
       await loading.dismiss();
@@ -661,14 +651,11 @@ export class ScannerPage implements OnInit {
 
     const insertQuery = `
     INSERT INTO tickets (ticket_id, codigoCompra, evento_id, checkin, ...)
-    VALUES (?, ?, ?, ?, ...);
-  `;
+    VALUES (?, ?, ?, ?, ...);`;
 
     for (const t of tickets) {
       await db.run(insertQuery, [t.ticket_id, t.codigoCompra, t.evento_id, t.checkin /* ... */]);
     }
-
-    console.log(`Se insertaron ${tickets.length} tickets`);
   }
 
 }

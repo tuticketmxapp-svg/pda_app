@@ -76,7 +76,17 @@ export class EventoService {
   uploadScannedTickets(scans: any[]) {
   return this.http.post(`${environment.apiUrl}tickets/sync-scans`, { scans });
 }
-
+listEnclosures(filters: any = {}) {
+  const query = new URLSearchParams(filters).toString();
+  return this.http.get<any>(
+    `${environment.apiUrl}enclosures?${query}`
+  ).pipe(
+    catchError(error => this.errorHandler.handleError(error))
+  );
+}
+  getTicketsEnclosure(id:any) {
+    return this.http.get<any>(`${environment.apiUrl}events/${id}/enclusure`).pipe(catchError(error => this.errorHandler.handleError(error)));
+  }
 }
 
 type Check = 0 | 1;

@@ -28,6 +28,7 @@ export interface Ticket {
   codeNumericQR: string;
   checkin: number;
   codigoCompra?: string;
+  enclosure_id: string;
 }
 @Component({
   selector: 'app-home',
@@ -39,7 +40,7 @@ export class HomePage {
   user: any;
   eventos: any;
   token: any;
-
+  enclosures: any;
   constructor(
     private eventoService: EventoService,
     private navCtrl: NavController,
@@ -60,6 +61,7 @@ export class HomePage {
   }
   async ngOnInit() {
     this.getUpcomingEvents();
+    this.getEnclosures();
 
   }
   async ionViewWillEnter() {
@@ -91,13 +93,14 @@ export class HomePage {
   async getUser() {
     this.eventoService.getUser().subscribe(async (data: any) => {
       this.storage.set('user', data);
+          localStorage.setItem('userData', JSON.stringify(data));
+
     });
   }
   async selectEntrada(event: { accesos: any[]; id: any | string; name: any; }) {
     const db = await this.sqliteService.getDatabase();
     await db.run('DELETE FROM tickets;');
     let buttons: { text: any; handler: () => Promise<void>; }[] = [];
-    console.log('event.id', event.id);
 
     event.accesos.forEach(element => {
       buttons.push({
@@ -119,26 +122,22 @@ export class HomePage {
                 // Guardar cada ticket en SQLite
                 for (const t of tickets) {
                   t.event_id = event.id;
+                  t.enclosure_id = '';
                   await this.sqliteService.addTicket(t);
                 }
-
-                console.log('✅ Tickets guardados en SQLite');
-
                 // Cerrar loading antes de navegar
                 await loading.dismiss();
 
                 // Navegar a scanner pasando el evento, acceso y tickets
                 await this.navCtrl.navigateRoot(['/scanner', event.id], {
-                  queryParams: { name: event.name, acceso: element }
+                  queryParams: { name: event.name, acceso: element, mode: 'evento' }
                 });
 
               } catch (err) {
-                console.error('Error guardando tickets en SQLite:', err);
                 await loading.dismiss();
               }
             },
             error: async (error) => {
-              console.error('Error descargando tickets:', error);
               await loading.dismiss();
             }
           });
@@ -153,7 +152,61 @@ export class HomePage {
     await actionSheet.present();
   }
 
+  getEnclosures() {
+    let filters = {
+      page: 1,
+      perPage: 25
+    }
+    this.eventoService.listEnclosures(filters).subscribe({
+      next: async (resp) => {
+        try {
 
+          this.enclosures = resp.data;
+        } catch (err) {
 
+        }
+      },
+      error: async (error) => {
+
+      }
+    });
+  }
+
+  async handleChange(event: Event) {
+     const db = await this.sqliteService.getDatabase();
+        await db.run('DELETE FROM tickets;');
+
+    // Mostrar loading
+    const loading = await this.loadingCtrl.create({
+      mode: 'ios',
+      message: 'Cargando boletos por recinto...',
+    });
+    await loading.present();
+    const target = event.target as HTMLIonSelectElement;
+    this.eventoService.getTicketsEnclosure(target.value.id).subscribe({
+      next: async (tickets: Ticket[]) => {
+        try {
+          for (const t of tickets) {
+            t.enclosure_id = target.value.id;
+            await this.sqliteService.addTicket(t);
+          }
+
+          // Cerrar loading antes de navegar
+          await loading.dismiss();
+
+          // Navegar a scanner pasando el evento, acceso y tickets
+          await this.navCtrl.navigateRoot(['/scanner', target.value.id], {
+            queryParams: { name: 'Canje Entradas a Concierto', acceso: 'PRINCIPAL', mode: 'enclosure', enclosure: target.value.id }
+          });
+
+        } catch (err) {
+          await loading.dismiss();
+        }
+      },
+      error: async (error) => {
+        await loading.dismiss();
+      }
+    });
+  }
 
 }

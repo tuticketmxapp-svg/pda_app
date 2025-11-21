@@ -6,6 +6,7 @@ export const environment = {
   production: false,
   version: '2.0.4',
   apiUrl: 'https://api.balamtickets.com/v1/',
+  apiUrl2: 'https://api.balamtickets.com/api/v1/',
   assets: {
     "no-image-available": "/assets/images/no-image-available.png",
     "img-user-profile": "/assets/images/userpreview.png",

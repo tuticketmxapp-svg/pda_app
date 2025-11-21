@@ -8,14 +8,25 @@
 
 <ion-content [fullscreen]="true">
   <img class="logo" src="assets/images/logo.svg" alt="logo">
+  <ion-list>
+    <ion-list>
+      <ion-item>
+        <ion-select aria-label="Recinto" placeholder="Selecciona un Recinto" (ionChange)="handleChange($event)">
+          @for (enclosure of enclosures; track enclosures) {
+          <ion-select-option [value]="enclosure">{{ enclosure.name }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+    </ion-list>
+  </ion-list>
 
-  <ion-card *ngFor="let e of eventos; let i = index"  (click)="selectEntrada(e)">
-  <!-- <ion-card *ngFor="let e of eventos; let i = $index"  [routerLink]="['/scanner/' + e.id]" [queryParams]="{ name : e.name}"> -->
-    <ion-img [src]="e.image_event_online" ></ion-img>
-    <ion-card-header >
+  <ion-card *ngFor="let e of eventos; let i = index" (click)="selectEntrada(e)">
+    <!-- <ion-card *ngFor="let e of eventos; let i = $index"  [routerLink]="['/scanner/' + e.id]" [queryParams]="{ name : e.name}"> -->
+    <ion-img [src]="e.image_event_online"></ion-img>
+    <ion-card-header>
       <ion-card-subtitle color="light">{{e.event_date}} a las {{e.event_time}} |
         {{e.enclosure_name}}</ion-card-subtitle>
-      <ion-card-title  color="light" class="title">{{e.name}}</ion-card-title>
+      <ion-card-title color="light" class="title">{{e.name}}</ion-card-title>
     </ion-card-header>
   </ion-card>
 </ion-content>

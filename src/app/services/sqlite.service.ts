@@ -36,6 +36,7 @@ export class SqliteService {
     CREATE TABLE IF NOT EXISTS tickets (
       code TEXT PRIMARY KEY,
       view INTEGER,
+      enclosure_id INTEGER, 
       ticket_status INTEGER,
       event_id TEXT,
       ticket_id TEXT,
@@ -49,7 +50,8 @@ export class SqliteService {
       sent INTEGER,
       codeNumericQR TEXT,
       checkin INTEGER,
-      codigoCompra TEXT
+      codigoCompra TEXT,
+      nameEvent TEXT
     );
   `);
 
@@ -59,8 +61,7 @@ export class SqliteService {
 
     // Garantiza que exista la tabla scanned_tickets (solo una vez)
     await this.ensureTablesExist();
-
-    console.log(`Base de datos lista para evento: ${eventId}`);
+    //await this.ensureTicketsTableUpdated();
   }
 
 
@@ -91,6 +92,7 @@ export class SqliteService {
           view INTEGER,
           ticket_status INTEGER,
           event_id TEXT,
+          enclosure_id INTEGER, 
           ticket_id TEXT,
           acceso TEXT,
           numeroOrden TEXT,
@@ -102,9 +104,11 @@ export class SqliteService {
           sent INTEGER,
           codeNumericQR TEXT,
           checkin INTEGER,
-          codigoCompra TEXT
+          codigoCompra TEXT,
+          nameEvent TEXT
         );
       `);
+      await this.ensureTicketsTableUpdated();
 
       this.isInitialized = true;
       console.log(' Base de datos inicializada correctamente');
@@ -117,20 +121,20 @@ export class SqliteService {
     }
   }
 
-// Verifica o crea tabla de escaneos
-async ensureTablesExist() {
-  if (!this.db) {
-    console.warn('⚠️ Base de datos aún no inicializada, inicializando...');
-    await this.initDB();
-  }
+  // Verifica o crea tabla de escaneos
+  async ensureTablesExist() {
+    if (!this.db) {
+      console.warn('⚠️ Base de datos aún no inicializada, inicializando...');
+      await this.initDB();
+    }
 
-  // 🧹 Eliminar la tabla anterior si existía
-  console.log('🗑️ Eliminando tabla scanned_tickets anterior (si existe)...');
-  await this.db!.run(`DROP TABLE IF EXISTS scanned_tickets;`);
+    // 🧹 Eliminar la tabla anterior si existía
+    console.log('🗑️ Eliminando tabla scanned_tickets anterior (si existe)...');
+    await this.db!.run(`DROP TABLE IF EXISTS scanned_tickets;`);
 
-  // 🆕 Crear la tabla nuevamente con la columna codigoCompra incluida
-  console.log('🆕 Creando tabla scanned_tickets con nueva estructura...');
-  await this.db!.run(`
+    // 🆕 Crear la tabla nuevamente con la columna codigoCompra incluida
+    console.log('🆕 Creando tabla scanned_tickets con nueva estructura...');
+    await this.db!.run(`
     CREATE TABLE IF NOT EXISTS scanned_tickets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ticket_id TEXT,
@@ -150,8 +154,24 @@ async ensureTablesExist() {
     );
   `);
 
-  console.log('✅ Tabla scanned_tickets recreada correctamente con codigoCompra');
-}
+    console.log('✅ Tabla scanned_tickets recreada correctamente con codigoCompra');
+  }
+  async ensureTicketsTableUpdated() {
+    if (!this.db) return;
+
+    const res = await this.db.query(`PRAGMA table_info(tickets);`);
+    console.log('COLUMNS:', res.values);
+    const columns = res.values?.map((c: any) => c.name) ?? [];
+
+    if (!columns.includes('enclosure_id')) {
+      console.log('Agregando columna enclosure_id');
+      await this.db.run(`ALTER TABLE tickets ADD COLUMN enclosure_id INTEGER;`);
+    }
+    if (!columns.includes('nameEvent')) {
+      console.log('Agregando columna nameEvent');
+      await this.db.run(`ALTER TABLE tickets ADD COLUMN nameEvent TEXT;`);
+    }
+  }
 
   // Inserta un ticket normal
   async addTicket(ticket: any) {
@@ -163,15 +183,17 @@ async ensureTablesExist() {
     try {
       await this.db.run(
         `INSERT OR REPLACE INTO tickets (
-        code, view, ticket_status, event_id, ticket_id, acceso,
-        numeroOrden, evento_id, username, fecha_lectura, created_at,
-        updated_at, sent, codeNumericQR, checkin, codigoCompra
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+  code, view, ticket_status, event_id, enclosure_id, ticket_id, acceso,
+  numeroOrden, evento_id, username, fecha_lectura, created_at, updated_at,
+  sent, codeNumericQR, checkin, codigoCompra, nameEvent
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           ticket.code,
           ticket.view ? 1 : 0,
           ticket.ticket_status,
-          ticket.event_id,
+          ticket.event_id || null,
+          ticket.enclosure_id || null,
           ticket.ticket_id,
           ticket.acceso,
           ticket.numeroOrden,
@@ -183,15 +205,18 @@ async ensureTablesExist() {
           ticket.sent,
           ticket.codeNumericQR,
           ticket.checkin,
-          ticket.codigoCompra || null // 👈 Nuevo campo
+          ticket.codigoCompra || null,
+          ticket.evento || null
         ]
+
       );
 
-      console.log(' Ticket insertado correctamente:', ticket?.codigoCompra || '(sin id)');
+      console.log(' Ticket insertado correctamente');
     } catch (err) {
       console.error(' Error insertando ticket:', err);
     }
   }
+
 
 
   async getDatabase() {
@@ -209,6 +234,23 @@ async ensureTablesExist() {
       return { values: [] };
     }
   }
+  async getTicketsByEnclosure(enclosure_id: string): Promise<number> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db.query(
+        `SELECT COUNT(*) AS cantidad 
+       FROM tickets 
+       WHERE enclosure_id = ? AND ticket_status = 1`,
+        [enclosure_id]
+      );
+
+      return result.values?.[0]?.cantidad ?? 0;
+    } catch (error) {
+      console.error(' Error obteniendo tickets por recinto:', error);
+      return 0;
+    }
+  }
+
 
   //  Guarda ticket escaneado con control offline/online
   async addScannedTicket(ticket: any, isOnline: boolean): Promise<void> {
@@ -305,7 +347,7 @@ async ensureTablesExist() {
     }
   }
 
-    async syncScans(uploadFn: (scans: any[]) => Promise<boolean>): Promise<void> {
+  async syncScans(uploadFn: (scans: any[]) => Promise<boolean>): Promise<void> {
     try {
       const db = await this.getDatabase();
 
@@ -357,26 +399,26 @@ async ensureTablesExist() {
     }
   }
   async countTickets(): Promise<number> {
-  try {
-    const db = await this.getDatabase();
-    const result = await db.query(`SELECT COUNT(*) as total FROM tickets;`);
-    return result.values?.[0]?.total ?? 0;
-  } catch (err) {
-    console.error('❌ Error contando tickets:', err);
-    return 0;
+    try {
+      const db = await this.getDatabase();
+      const result = await db.query(`SELECT COUNT(*) as total FROM tickets;`);
+      return result.values?.[0]?.total ?? 0;
+    } catch (err) {
+      console.error('❌ Error contando tickets:', err);
+      return 0;
+    }
   }
-}
-async clearTickets(): Promise<void> {
-  const db = await this.getDatabase();
-  await db.execute(`DELETE FROM tickets;`);
-  console.log('🗑️ Todos los tickets locales fueron eliminados');
-}
-async getAllTicketIds(): Promise<string[]> {
-  const db = await this.getDatabase();
-  const query = `SELECT ticket_id FROM tickets;`;
-  const result = await db.query(query);
-  return result.values?.map((row: any) => row.ticket_id) ?? [];
-}
+  async clearTickets(): Promise<void> {
+    const db = await this.getDatabase();
+    await db.execute(`DELETE FROM tickets;`);
+    console.log('🗑️ Todos los tickets locales fueron eliminados');
+  }
+  async getAllTicketIds(): Promise<string[]> {
+    const db = await this.getDatabase();
+    const query = `SELECT ticket_id FROM tickets;`;
+    const result = await db.query(query);
+    return result.values?.map((row: any) => row.ticket_id) ?? [];
+  }
 
 
 }
