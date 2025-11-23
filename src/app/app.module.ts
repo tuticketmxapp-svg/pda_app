@@ -19,7 +19,7 @@ import { JwtHelperService, JWT_OPTIONS } from '@auth0/angular-jwt';
     BrowserModule,
     IonicModule.forRoot(),
     AppRoutingModule,
-    HttpClientModule, // ✅ en lugar de provideHttpClient()
+    HttpClientModule,
     FontAwesomeModule,
   ],
   providers: [

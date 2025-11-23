@@ -36,7 +36,6 @@ interface Ticket {
   standalone: false,
 })
 export class ScannerPage implements OnInit {
-  // UI / state
   title = '';
   acceso = '';
   event_id = '';
@@ -44,12 +43,9 @@ export class ScannerPage implements OnInit {
   isSupported = false;
   last_update = '';
   list: string = 'local';
-  // Local data
   entered: any[] = [];         // escaneos locales (pendientes)
   lecturaOnline: any[] = [];   // escaneos online (traídos del servidor)
   user: any = null;
-
-  // pequeño buffer para detectar teclas físicas
   codeBuffer = '';
   LIMIT1 = 50; // para lista 'local'
   LIMIT2 = 50; // para lista 'online'
@@ -70,10 +66,6 @@ export class ScannerPage implements OnInit {
     private sqliteService: SqliteService,
     private platform: Platform
   ) { }
-
-  /* ---------------------------
-     lifecycle
-     --------------------------- */
   async ngOnInit() {
     const rawUserData = localStorage.getItem('userData');
 
@@ -81,8 +73,6 @@ export class ScannerPage implements OnInit {
       this.user = JSON.parse(localStorage.getItem('userData') ?? 'null');
     }
     this.isSupported = !!BarcodeScanner.startScan;
-
-    // escuchar cambios de red para sincronizar offline scans
     Network.addListener('networkStatusChange', async (status) => {
       if (status.connected) {
         await this.syncOfflineTickets();
@@ -94,11 +84,6 @@ export class ScannerPage implements OnInit {
     if (status.connected) {
       await this.syncOfflineTickets();
     }
-
-    // Params — cuando se navega desde home con event_id
-    //    this.route.params.subscribe( params => {
-    //   this.event_id = params['event_id'];
-    // });
 
     this.route.queryParams.subscribe(async query => {
       this.modo = query['mode'];
@@ -153,20 +138,14 @@ export class ScannerPage implements OnInit {
       }
     } else {
       this.codeBuffer += key;
-      // limitar buffer a tamaño razonable
       if (this.codeBuffer.length > 200) this.codeBuffer = this.codeBuffer.slice(-200);
     }
   }
   segmentChanged(event: any) {
     const newValue = event.detail?.value || this.list;
     this.list = newValue;
-    // Guardar el nuevo valor en localStorage
     localStorage.setItem('scannerSegment', newValue);
   }
-
-  /* ---------------------------
-     Scanner (UI + plugin-safe)
-     --------------------------- */
   async cameraScan(): Promise<void> {
     if (!this.isSupported) {
       await this.presentErrorAlert('Scanner no soportado', 'El plugin de scanner no está disponible en este entorno.');
@@ -174,26 +153,16 @@ export class ScannerPage implements OnInit {
     }
 
     try {
-      // intentar pedir permisos (algunos dispositivos/plugins no implementan este método)
       try {
-        // forzar permiso si es necesario
-        // algunos dispositivos implementan checkPermission, otros no -> try/catch
-        // @ts-ignore
         await BarcodeScanner.checkPermission?.({ force: true });
       } catch (permErr) {
       }
-
-      // hideBackground puede no estar implementado en Android plugin -> try/catch
       try {
         await BarcodeScanner.hideBackground?.();
         document.body.classList.add('scanner-active');
       } catch (hideErr) {
       }
-
-      // iniciar escaneo
       const result = await BarcodeScanner.startScan();
-
-      // finalizar escaneo visual (mostrar fondo de nuevo)
       try {
         await BarcodeScanner.showBackground?.();
         document.body.classList.remove('scanner-active');
@@ -204,24 +173,20 @@ export class ScannerPage implements OnInit {
         const scanned = result.content;
         await this.findTicket(scanned);
       } else {
-        // opcional: mostrar toast
       }
     } catch (err) {
       await this.presentErrorAlert('Scan error', 'Ocurrió un error al escanear. Intenta de nuevo.');
-      // Asegurar que UI vuelva a estado normal
       try { document.body.classList.remove('scanner-active'); } catch { }
       try { await BarcodeScanner.showBackground?.(); } catch { }
     }
   }
 
   /* ---------------------------
-     Find Ticket -> busca en sqlite y maneja lógica
+     Find Ticket -> busca en sqlite
      --------------------------- */
   async findTicket(ticket: any) {
     let codeTick = '';
     let idEvento = '';
-
-    // normalizar
     const isNumeric = /^\d+$/.test(String(ticket));
     if (isNumeric) {
       codeTick = String(ticket);
@@ -250,7 +215,7 @@ export class ScannerPage implements OnInit {
     }
 
     if (!response || response.length === 0) {
-      this.presentToast('danger', 'Ticket no encontrado', 'No válido o necesita actualizar');
+      this.presentToast('danger', 'Ticket no encontrado', 'No válido , escaneado anteriormente o necesita actualizar');
       return;
     }
 
@@ -295,9 +260,13 @@ export class ScannerPage implements OnInit {
       <p>Permitir canje de Boletos</p>
       <div class="toast-info">
         <strong>Evento:</strong> ${ticket.nameEvent || 'N/D'} <br>
-        <strong>Número de Orden</strong>${ticket.numeroOrden || 'N/D'} <br>
+        <strong>Número de Orden:</strong> ${ticket.numeroOrden || 'N/D'} <br>
         <strong>Usuario:</strong> ${ticket.username || 'N/D'}
       </div>
+
+      <button id="btnConfirmarCanje" class="toast-button">
+        CONFIRMACIÓN DE CANJE
+      </button>
     </div>
   `;
 
@@ -306,12 +275,15 @@ export class ScannerPage implements OnInit {
     // Mostrar con animación
     setTimeout(() => toastEl.classList.add('show'), 50);
 
-    // Ocultar automáticamente
-    setTimeout(() => {
-      toastEl.classList.remove('show');
-      setTimeout(() => toastEl.remove(), 500);
-    }, 4000);
+    // Escuchar clic del botón
+    document
+      .getElementById('btnConfirmarCanje')
+      ?.addEventListener('click', () => {
+        toastEl.classList.remove('show');
+        setTimeout(() => toastEl.remove(), 500);
+      });
   }
+
 
 
   /* ---------------------------
@@ -337,7 +309,7 @@ export class ScannerPage implements OnInit {
     }
   }
 
-  // búsqueda optimizada cuando hay > 70k registros
+  // búsqueda optimizada para buscar por recinto
   async findOccurrencesByCompra(codigoCompra: string): Promise<any[]> {
     try {
       const db = await this.sqliteService.getDatabase();
@@ -358,7 +330,6 @@ export class ScannerPage implements OnInit {
      setEnteder / upload / entered management
      --------------------------- */
   async getEnteder() {
-    // mantengo compatibilidad con storage si aún lo usas
     try {
       const stored = await (this.sqliteService as any).getEnteredFromStorage?.() ?? null;
       if (Array.isArray(stored)) this.entered = stored;
@@ -404,8 +375,6 @@ export class ScannerPage implements OnInit {
 
   // Subir pendientes (usa tu servicio/sqliteService)
   async syncOfflineTickets() {
-
-    // si tu SqliteService tiene syncOfflineScans(callback) úsalo (más eficiente)
     try {
       if (typeof this.sqliteService.syncOfflineScans === 'function') {
         await this.sqliteService.syncOfflineScans(async (scans) => {
@@ -437,10 +406,6 @@ export class ScannerPage implements OnInit {
     } catch (err) {
     }
   }
-
-  /* ---------------------------
-     util / helpers UI
-     --------------------------- */
   async presentToast(color = 'medium', header = '', message = '', item: any = null) {
     const buttons: any[] = [{ icon: 'close-outline', role: 'cancel', handler: () => { } }];
     if (item?.ticket_id) {
@@ -463,9 +428,6 @@ export class ScannerPage implements OnInit {
     await modal.present();
   }
 
-  /* ---------------------------
-     counters
-     --------------------------- */
   async setTotalTickets(): Promise<void> {
     try {
       const result = await this.sqliteService.getTicketsByEvent(this.event_id);
@@ -489,7 +451,6 @@ export class ScannerPage implements OnInit {
  * Retorna true si puede entrar, false si debe bloquearse.
  */
   check(ticket: Ticket): boolean {
-    // ejemplo de validaciones — ajusta según tu lógica real
     if (!ticket) {
       this.presentToast('danger', 'Error', 'Ticket no válido');
       return false;
@@ -516,28 +477,33 @@ export class ScannerPage implements OnInit {
     // si pasa todas las validaciones
     return true;
   }
-  async viewTicket(ticket_id: string) {
-
-    let idEvento = '';
+  async viewTicket(data: any) {
     let codeTick = '';
+    let idEvento = '';
 
-    const tt = ticket_id.toLowerCase();
-    const parts = tt.split('-');
-
-    if (parts.length === 2) {
-      [idEvento, codeTick] = parts;
+    // normalizar
+    const isNumeric = /^\d+$/.test(String(data.ticket));
+    if (isNumeric) {
+      codeTick = String(data.ticket);
     } else {
-      codeTick = ticket_id;
+      const tt = String(data.ticket).toLowerCase();
+      const parts = tt.split('-');
+      codeTick = parts.length !== 2 ? tt : parts[1];
+      idEvento = parts.length !== 2 ? '' : parts[0];
     }
-
-    const response = this.findOccurrences(codeTick);
-
+    let response;
+    if (this.modo == 'enclosure') {
+      response = await this.findOccurrencesByCompra(data.codigoCompra);
+    } else {
+      const isNumeric = /^\d+$/.test(String(codeTick));
+      response = isNumeric
+        ? await this.findOccurrences(codeTick)
+        : await this.findOccurrencesAlfa(codeTick);
+    }
     if (!response || (await response).length === 0) {
       this.presentToast('danger', 'Ticket no encontrado', 'No válido para éste evento o actualice los últimos tickets');
       return;
     }
-
-    // Para evitar abrir muchos modales simultáneamente, esperamos uno a la vez
     for (const item of await response) {
       item.view = true;
       await this.modalScanner(item);

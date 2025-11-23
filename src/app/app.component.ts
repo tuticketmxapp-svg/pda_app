@@ -33,11 +33,10 @@ export class AppComponent {
     private router: Router,
     private activateRoute: ActivatedRoute,
     private langSvc: LanguageService,
-    private sqliteService: SqliteService // ✅ Inyección correcta
+    private sqliteService: SqliteService
   ) {
     this.initializeApp();
     this.langSvc.getSelectedIdiom$().subscribe((result: { idioma: string }) => {
-      // Aquí puedes manejar traducciones si usas ngx-translate o similar
     });
   }
 

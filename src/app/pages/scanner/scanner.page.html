@@ -51,8 +51,8 @@
   <ion-list inset *ngIf="list === 'local'">
     <ion-item-sliding *ngFor="let e of entered | slice:0:LIMIT1; let i = index;">
       <ion-item>
-        <ion-label (click)="viewTicket(e.ticket_id)">
-          {{ i + 1 }}. {{ e.ticket_id }}<br>
+        <ion-label (click)="viewTicket(e)">
+          {{ i + 1 }}. {{ e.numeroOrden }}<br>
           <small>{{ e.acceso }} • {{ e.fecha_lectura | date: 'HH:mm:ss' }}</small>
         </ion-label>
         <ion-icon slot="end" name="checkmark-circle-outline" class="check-icon-success"></ion-icon>

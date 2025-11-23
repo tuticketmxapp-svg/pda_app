@@ -76,10 +76,10 @@ export class SqliteService {
       const isConn = (await this.sqlite.isConnection(this.dbName, false)).result;
 
       if (isConn) {
-        console.log('🔄 Reutilizando conexión existente');
+        console.log(' Reutilizando conexión existente');
         this.db = await this.sqlite.retrieveConnection(this.dbName, false);
       } else {
-        console.log('🆕 Creando nueva conexión SQLite');
+        console.log('Creando nueva conexión SQLite');
         this.db = await this.sqlite.createConnection(this.dbName, false, 'no-encryption', 1, false);
       }
 
@@ -124,16 +124,16 @@ export class SqliteService {
   // Verifica o crea tabla de escaneos
   async ensureTablesExist() {
     if (!this.db) {
-      console.warn('⚠️ Base de datos aún no inicializada, inicializando...');
+      console.warn('Base de datos aún no inicializada, inicializando...');
       await this.initDB();
     }
 
-    // 🧹 Eliminar la tabla anterior si existía
-    console.log('🗑️ Eliminando tabla scanned_tickets anterior (si existe)...');
+    //  Eliminar la tabla anterior si existía
+    console.log('Eliminando tabla scanned_tickets anterior (si existe)...');
     await this.db!.run(`DROP TABLE IF EXISTS scanned_tickets;`);
 
-    // 🆕 Crear la tabla nuevamente con la columna codigoCompra incluida
-    console.log('🆕 Creando tabla scanned_tickets con nueva estructura...');
+    // Crear la tabla nuevamente con la columna codigoCompra incluida
+    console.log('Creando tabla scanned_tickets con nueva estructura...');
     await this.db!.run(`
     CREATE TABLE IF NOT EXISTS scanned_tickets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +154,7 @@ export class SqliteService {
     );
   `);
 
-    console.log('✅ Tabla scanned_tickets recreada correctamente con codigoCompra');
+    console.log('Tabla scanned_tickets recreada correctamente con codigoCompra');
   }
   async ensureTicketsTableUpdated() {
     if (!this.db) return;
@@ -216,6 +216,53 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       console.error(' Error insertando ticket:', err);
     }
   }
+
+async insertTicketsBulk(tickets: any[]) {
+  if (!this.db) return;
+  const chunkSize = 1000;
+
+  for (let i = 0; i < tickets.length; i += chunkSize) {
+
+    const chunk = tickets.slice(i, i + chunkSize);
+
+    const valuesSQL = chunk
+      .map(() => `(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .join(",");
+    const sql = `
+      INSERT OR REPLACE INTO tickets (
+        code, view, ticket_status, event_id, enclosure_id, ticket_id, acceso,
+        numeroOrden, evento_id, username, fecha_lectura, created_at, updated_at,
+        sent, codeNumericQR, checkin, codigoCompra, nameEvent
+      ) VALUES ${valuesSQL};
+    `;
+
+    // Construir el array plano de valores
+    const values: any[] = [];
+    chunk.forEach(t => {
+      values.push(
+        t.code,
+        t.view ? 1 : 0,
+        t.ticket_status,
+        t.event_id || null,
+        t.enclosure_id || null,
+        t.ticket_id,
+        t.acceso,
+        t.numeroOrden,
+        t.evento_id,
+        t.nombre,
+        t.fecha_lectura,
+        t.created_at,
+        t.updated_at,
+        t.sent,
+        t.codeNumericQR,
+        t.checkin,
+        t.codigoCompra || null,
+        t.evento || null
+      );
+    });
+    await this.db.run(sql, values);
+  }
+}
 
 
 
@@ -320,13 +367,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         return;
       }
 
-      console.log(`📤 Sincronizando ${scans.length} escaneos offline...`);
+      console.log(`Sincronizando ${scans.length} escaneos offline...`);
 
       //  Enviar al servidor (tu función la maneja)
       const success = await uploadFn(scans);
 
       if (!success) {
-        console.warn('⚠️ La sincronización falló, reintentará más tarde');
+        console.warn('La sincronización falló, reintentará más tarde');
         return;
       }
 
@@ -363,13 +410,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         return;
       }
 
-      console.log(`📤 Sincronizando ${scans.length} escaneos offline...`);
+      console.log(`Sincronizando ${scans.length} escaneos offline...`);
 
       //  Enviar al servidor (tu función la maneja)
       const success = await uploadFn(scans);
 
       if (!success) {
-        console.warn('⚠️ La sincronización falló, reintentará más tarde');
+        console.warn('La sincronización falló, reintentará más tarde');
         return;
       }
 
@@ -395,7 +442,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       await this.sqlite.closeConnection(this.dbName, false);
       this.db = null;
       this.isInitialized = false;
-      console.log('🔒 Base de datos cerrada');
+      console.log('Base de datos cerrada');
     }
   }
   async countTickets(): Promise<number> {
@@ -404,14 +451,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       const result = await db.query(`SELECT COUNT(*) as total FROM tickets;`);
       return result.values?.[0]?.total ?? 0;
     } catch (err) {
-      console.error('❌ Error contando tickets:', err);
+      console.error(' Error contando tickets:', err);
       return 0;
     }
   }
   async clearTickets(): Promise<void> {
     const db = await this.getDatabase();
     await db.execute(`DELETE FROM tickets;`);
-    console.log('🗑️ Todos los tickets locales fueron eliminados');
+    console.log('Todos los tickets locales fueron eliminados');
   }
   async getAllTicketIds(): Promise<string[]> {
     const db = await this.getDatabase();
@@ -419,6 +466,96 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     const result = await db.query(query);
     return result.values?.map((row: any) => row.ticket_id) ?? [];
   }
+  async addTicketsBulk(tickets: any[]) {
+    if (!this.db) {
+      console.error('La base de datos no está inicializada');
+      return;
+    }
+
+    try {
+      // Iniciar transacción
+      await this.db.execute('BEGIN TRANSACTION;');
+
+      for (const ticket of tickets) {
+        await this.db.run(
+          `INSERT OR REPLACE INTO tickets (
+          code, view, ticket_status, event_id, enclosure_id, ticket_id, acceso,
+          numeroOrden, evento_id, username, fecha_lectura, created_at, updated_at,
+          sent, codeNumericQR, checkin, codigoCompra, nameEvent
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          [
+            ticket.code,
+            ticket.view ? 1 : 0,
+            ticket.ticket_status,
+            ticket.event_id || null,
+            ticket.enclosure_id || null,
+            ticket.ticket_id,
+            ticket.acceso,
+            ticket.numeroOrden,
+            ticket.evento_id,
+            ticket.username || ticket.nombre,
+            ticket.fecha_lectura,
+            ticket.created_at,
+            ticket.updated_at,
+            ticket.sent,
+            ticket.codeNumericQR,
+            ticket.checkin,
+            ticket.codigoCompra || null,
+            ticket.evento || null
+          ]
+        );
+      }
+
+      // Finalizar transacción
+      await this.db.execute('COMMIT;');
+      console.log(` Insertados ${tickets.length} tickets en BULK correctamente`);
+
+    } catch (err) {
+      await this.db.execute('ROLLBACK;');
+      console.error(' Error en bulk insert:', err);
+    }
+  }
+async addTicketsBatch(tickets: any[]) {
+  const db = await this.getDatabase();
+
+  // Convertimos todos los tickets a un batch de sentencias
+  const statements = tickets.map(t => ({
+    statement: `
+      INSERT OR REPLACE INTO tickets (
+        ticket_id,
+        event_id,
+        enclosure_id,
+        ticket_zone,
+        ticket_section,
+        ticket_row,
+        ticket_seat,
+        checkin,
+        ticket_status,
+        ticket_promocode,
+        sale_update,
+        ticket_update
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    values: [
+      t.ticket_id,
+      t.event_id,
+      t.enclosure_id,
+      t.ticket_zone,
+      t.ticket_section,
+      t.ticket_row,
+      t.ticket_seat,
+      t.checkin,
+      t.ticket_status,
+      t.ticket_promocode,
+      t.sale_update,
+      t.ticket_update
+    ]
+  }));
+
+  // Ejecutar todas las sentencias en un batch (MUY RÁPIDO)
+  await db.executeSet(statements);
+}
 
 
 }

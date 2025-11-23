@@ -53,9 +53,6 @@ export class HomePage {
     private sqliteService: SqliteService
   ) {
     this.langSvc.getSelectedIdiom$().subscribe((result: { idioma: any; }) => {
-      // translate.addLangs(['es', 'pt']);
-      // translate.setDefaultLang(result.idioma);
-      // translate.use(result.idioma);
     });
     this.getUser();
   }
@@ -106,10 +103,7 @@ export class HomePage {
       buttons.push({
         text: element,
         handler: async () => {
-          // Inicia la base de datos antes de guardar
           await this.sqliteService.initEventDB(event.id);
-
-          // Mostrar loading
           const loading = await this.loadingCtrl.create({
             mode: 'ios',
             message: 'Cargando boletos...',
@@ -119,16 +113,12 @@ export class HomePage {
           this.eventoService.getTicekts(event.id, '').subscribe({
             next: async (tickets: Ticket[]) => {
               try {
-                // Guardar cada ticket en SQLite
                 for (const t of tickets) {
                   t.event_id = event.id;
                   t.enclosure_id = '';
                   await this.sqliteService.addTicket(t);
                 }
-                // Cerrar loading antes de navegar
                 await loading.dismiss();
-
-                // Navegar a scanner pasando el evento, acceso y tickets
                 await this.navCtrl.navigateRoot(['/scanner', event.id], {
                   queryParams: { name: event.name, acceso: element, mode: 'evento' }
                 });
@@ -175,7 +165,6 @@ export class HomePage {
   async handleChange(event: Event) {
      const db = await this.sqliteService.getDatabase();
         await db.run('DELETE FROM tickets;');
-
     // Mostrar loading
     const loading = await this.loadingCtrl.create({
       mode: 'ios',
@@ -190,11 +179,7 @@ export class HomePage {
             t.enclosure_id = target.value.id;
             await this.sqliteService.addTicket(t);
           }
-
-          // Cerrar loading antes de navegar
           await loading.dismiss();
-
-          // Navegar a scanner pasando el evento, acceso y tickets
           await this.navCtrl.navigateRoot(['/scanner', target.value.id], {
             queryParams: { name: 'Canje Entradas a Concierto', acceso: 'PRINCIPAL', mode: 'enclosure', enclosure: target.value.id }
           });
