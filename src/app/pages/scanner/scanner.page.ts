@@ -264,7 +264,7 @@ export class ScannerPage implements OnInit {
         <strong>Usuario:</strong> ${ticket.username || 'N/D'}
       </div>
 
-      <button id="btnConfirmarCanje" class="toast-button">
+      <button id="btnConfirmarCanje" class="toast-button" style="width:100%;padding:12px 0;margin-top:18px;background:#28a745;color:white;border:none;border-radius:8px;font-weight:bold;">
         CONFIRMACIÓN DE CANJE
       </button>
     </div>
@@ -511,7 +511,7 @@ export class ScannerPage implements OnInit {
   }
   async goBack() {
     const db = await this.sqliteService.getDatabase();
-    await db.run('DELETE FROM tickets;');
+    //await db.run('DELETE FROM tickets;');
     this.navCtrl.back();
   }
   async actionSheet() {

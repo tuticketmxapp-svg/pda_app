@@ -90,7 +90,7 @@ export class HomePage {
   async getUser() {
     this.eventoService.getUser().subscribe(async (data: any) => {
       this.storage.set('user', data);
-          localStorage.setItem('userData', JSON.stringify(data));
+      localStorage.setItem('userData', JSON.stringify(data));
 
     });
   }
@@ -162,36 +162,70 @@ export class HomePage {
     });
   }
 
-  async handleChange(event: Event) {
-     const db = await this.sqliteService.getDatabase();
-        await db.run('DELETE FROM tickets;');
-    // Mostrar loading
+  async handleChange(event: Event): Promise<void> {
+    const target = event.target as HTMLIonSelectElement;
+    const enclosureId = target.value.id;
+
+    const db = await this.sqliteService.getDatabase();
+
+    // Consultar si ya hay boletos guardados
+    const res = await db.query('SELECT COUNT(*) as total FROM tickets');
+    const total = res.values?.[0]?.total ?? 0;
+    console.log('res', res);
+    console.log('total', total);
+    // Si ya hay boletos, solo navegar sin consultar API
+    if (total > 0) {
+      await this.navCtrl.navigateRoot(['/scanner', enclosureId], {
+        queryParams: {
+          name: 'Canje Entradas a Concierto',
+          acceso: 'PRINCIPAL',
+          mode: 'enclosure',
+          enclosure: enclosureId
+        }
+      });
+      return; // <-- finalizar la función
+
+    }
+
+    //--------------------------------------
+    // SI NO HAY BOLETOS, DESCARGAR E INSERTAR
+    //--------------------------------------
+
     const loading = await this.loadingCtrl.create({
       mode: 'ios',
       message: 'Cargando boletos por recinto...',
     });
     await loading.present();
-    const target = event.target as HTMLIonSelectElement;
-    this.eventoService.getTicketsEnclosure(target.value.id).subscribe({
+
+    this.eventoService.getTicketsEnclosure(enclosureId).subscribe({
       next: async (tickets: Ticket[]) => {
         try {
           for (const t of tickets) {
-            t.enclosure_id = target.value.id;
+            t.enclosure_id = enclosureId;
             await this.sqliteService.addTicket(t);
           }
+
           await loading.dismiss();
-          await this.navCtrl.navigateRoot(['/scanner', target.value.id], {
-            queryParams: { name: 'Canje Entradas a Concierto', acceso: 'PRINCIPAL', mode: 'enclosure', enclosure: target.value.id }
+
+          this.navCtrl.navigateRoot(['/scanner', enclosureId], {
+            queryParams: {
+              name: 'Canje Entradas a Concierto',
+              acceso: 'PRINCIPAL',
+              mode: 'enclosure',
+              enclosure: enclosureId
+            }
           });
 
         } catch (err) {
           await loading.dismiss();
         }
       },
-      error: async (error) => {
+      error: async () => {
         await loading.dismiss();
       }
     });
   }
+
+
 
 }

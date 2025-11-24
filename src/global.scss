@@ -444,3 +444,16 @@ ion-popover [popover]:not(:popover-open):not(dialog[open]) {
 .alert-radio-label.sc-ion-alert-md{
     color: white!important;
 }
+
+.custom-toast-success .toast-content .toast-button {
+  width: 100% !important;
+  padding: 12px 0;
+  margin-top: 18px;
+  background: #28a745 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
