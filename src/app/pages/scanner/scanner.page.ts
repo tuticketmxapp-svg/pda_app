@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, HostListener, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import {
   ActionSheetController,
@@ -35,7 +35,7 @@ interface Ticket {
   templateUrl: './scanner.page.html',
   standalone: false,
 })
-export class ScannerPage implements OnInit {
+export class ScannerPage implements OnInit, OnDestroy {
   title = '';
   acceso = '';
   event_id = '';
@@ -53,6 +53,7 @@ export class ScannerPage implements OnInit {
   escaneados: any[] = [];
   modo: any;
   enclosure_id = '';
+  intervalId: any;
   constructor(
     private route: ActivatedRoute,
     private navCtrl: NavController,
@@ -112,8 +113,11 @@ export class ScannerPage implements OnInit {
       this.list = savedSegment;
     }
     await this.loadScannedTickets();
+    this.loadScannedTicketsOnline();
+    this.intervalId = setInterval(() => {
+      this.loadScannedTicketsOnline();
+    }, 5000);
   }
-
 
   async loadScannedTickets() {
     try {
@@ -264,7 +268,7 @@ export class ScannerPage implements OnInit {
         <strong>Usuario:</strong> ${ticket.username || 'N/D'}
       </div>
 
-      <button id="btnConfirmarCanje" class="toast-button" style="width:100%;padding:12px 0;margin-top:18px;background:#28a745;color:white;border:none;border-radius:8px;font-weight:bold;">
+      <button id="btnConfirmarCanje" class="toast-button" style="width:100%;padding:12px 0;margin-top:18px;background:#28a745;color;border:2px solid #000;border-radius:8px;font-weight;">
         CONFIRMACIÓN DE CANJE
       </button>
     </div>
@@ -623,5 +627,12 @@ export class ScannerPage implements OnInit {
       await db.run(insertQuery, [t.ticket_id, t.codigoCompra, t.evento_id, t.checkin /* ... */]);
     }
   }
-
+  async loadScannedTicketsOnline() {
+    this.lecturaOnline = await this.sqliteService.getOnlineScannedTickets();
+  }
+  ngOnDestroy() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+  }
 }

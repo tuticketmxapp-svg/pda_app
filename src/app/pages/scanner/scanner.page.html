@@ -32,19 +32,19 @@
     <small class="text-danger">Por este dispositivo</small>
   </h4>
 
-<ion-segment [(ngModel)]="list" (ionChange)="segmentChanged($event)">
-  <ion-segment-button value="local">
-    <ion-label>Local ({{ entered.length }})</ion-label>
-  </ion-segment-button>
+  <ion-segment [(ngModel)]="list" (ionChange)="segmentChanged($event)">
+    <ion-segment-button value="local">
+      <ion-label>Local ({{ entered.length }})</ion-label>
+    </ion-segment-button>
 
-  <ion-segment-button value="online">
-    <ion-label>Online ({{ lecturaOnline.length }})</ion-label>
-  </ion-segment-button>
+    <ion-segment-button value="online">
+      <ion-label>Online ({{ lecturaOnline.length }})</ion-label>
+    </ion-segment-button>
 
-  <ion-segment-button value="historial">
-    <ion-label>Historial ({{ escaneados.length }})</ion-label>
-  </ion-segment-button>
-</ion-segment>
+    <ion-segment-button value="historial">
+      <ion-label>Historial ({{ escaneados.length }})</ion-label>
+    </ion-segment-button>
+  </ion-segment>
 
 
   <!-- 🔹 Lista Local -->
@@ -80,12 +80,12 @@
         </ion-label>
         <ion-icon slot="end" name="checkmark-circle-outline" class="check-icon-success"></ion-icon>
       </ion-item>
-<!-- 
-      <ion-item-options side="end">
-        <ion-item-option color="danger" expandable (click)="deleteItemFromList(e, lecturaOnline, 2)">
-          Eliminar
-        </ion-item-option>
-      </ion-item-options> -->
+      <!-- 
+                <ion-item-options side="end">
+                  <ion-item-option color="danger" expandable (click)="deleteItemFromList(e, lecturaOnline, 2)">
+                    Eliminar
+                  </ion-item-option>
+                </ion-item-options> -->
     </ion-item-sliding>
 
     <ion-item button detail="false" (click)="LIMIT2 = LIMIT2 + 50">
@@ -98,7 +98,7 @@
     <ion-item-sliding *ngFor="let e of escaneados | slice:0:LIMIT3; let i = index;">
       <ion-item>
         <ion-label (click)="findTicket(e.code)">
-          {{ i + 1 }}. {{ e.code }}<br>
+          {{ i + 1 }}. {{ e.numeroOrden }}<br>
           <small>{{ e.acceso }} • {{ e.date | date: 'HH:mm:ss' }}</small>
         </ion-label>
       </ion-item>
