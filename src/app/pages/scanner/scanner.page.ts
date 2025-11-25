@@ -117,6 +117,9 @@ export class ScannerPage implements OnInit, OnDestroy {
     this.intervalId = setInterval(() => {
       this.loadScannedTicketsOnline();
     }, 5000);
+    setInterval(() => {
+      this.syncRemoteReads();
+    }, 5000);
   }
 
   async loadScannedTickets() {
@@ -251,6 +254,7 @@ export class ScannerPage implements OnInit, OnDestroy {
     this.setEnteder(itemFindTicket);
     await this.presentToastSuccess(itemFindTicket);
     await this.sqliteService.addScannedTicket(itemFindTicket, isOnline);
+    await this.syncRemoteReads();
     await this.loadScannedTickets();
   }
   async presentToastSuccess(ticket: any) {
@@ -634,5 +638,49 @@ export class ScannerPage implements OnInit, OnDestroy {
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
+  }
+async syncRemoteReads() {
+
+  const lastSync = await this.getLastSyncDate();
+
+  this.eventoService.getRemoteReads(lastSync).subscribe({
+    next: async (response: any) => {
+
+      const reads = response.data;
+
+      if (!reads || reads.length === 0) return;
+
+      const db = await this.sqliteService.getDatabase();
+
+      for (const r of reads) {
+        await db.run(
+          `UPDATE tickets SET checkin = ?, updated_at = ? WHERE ticket_id = ?`,
+          [0, r.updated_at, r.ticket_id]
+        );
+      }
+
+      // Guardar el updated_at más nuevo
+      const newest = reads[reads.length - 1].updated_at;
+      await this.setLastSyncDate(newest);
+
+    },
+    error: (err) => {
+      console.error('SYNC ERROR');
+      console.error('STATUS:', err.status);
+      console.error('BODY:', err.error);
+      console.error('FULL:', err);
+    }
+  });
+}
+
+
+
+
+  async getLastSyncDate(): Promise<string> {
+    return localStorage.getItem('lastSyncDate') ?? '2020-01-01 00:00:00';
+  }
+
+  async setLastSyncDate(date: string) {
+    localStorage.setItem('lastSyncDate', date);
   }
 }

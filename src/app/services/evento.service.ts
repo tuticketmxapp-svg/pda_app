@@ -56,37 +56,47 @@ export class EventoService {
   }
   getHistorial(id: any, date: any) {
     let params = '';
-    (date!= '' && typeof date !=='undefined') ? params = '?date=' + date : '';
+    (date != '' && typeof date !== 'undefined') ? params = '?date=' + date : '';
     return this.http.get<any>(`${environment.apiUrl}sales/lecturas/${id}${params}`).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
-  checkin(data: any){
-    return this.http.post<any>(`${environment.apiUrl}sales/tickets/ckeckIn`,data).pipe(catchError(error => this.errorHandler.handleError(error)));
+  checkin(data: any) {
+    return this.http.post<any>(`${environment.apiUrl}sales/tickets/ckeckIn`, data).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
-  
+
   setSale(data: any) {
     localStorage.setItem('setSale', JSON.stringify(data));
   }
 
-  getQr(qr:any){
+  getQr(qr: any) {
     return this.http.get<any>(`${environment.apiUrl}leones/${qr}`).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
-  getHistorialQr(id:any) {
+  getHistorialQr(id: any) {
     return this.http.get<any>(`${environment.apiUrl}leones/tickets_event/${id}`).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
   uploadScannedTickets(scans: any[]) {
-  return this.http.post(`${environment.apiUrl}tickets/sync-scans`, { scans });
-}
-listEnclosures(filters: any = {}) {
-  const query = new URLSearchParams(filters).toString();
-  return this.http.get<any>(
-    `${environment.apiUrl}enclosures?${query}`
-  ).pipe(
-    catchError(error => this.errorHandler.handleError(error))
-  );
-}
-  getTicketsEnclosure(id:any) {
+    return this.http.post(`${environment.apiUrl}tickets/sync-scans`, { scans });
+  }
+  listEnclosures(filters: any = {}) {
+    const query = new URLSearchParams(filters).toString();
+    return this.http.get<any>(
+      `${environment.apiUrl}enclosures?${query}`
+    ).pipe(
+      catchError(error => this.errorHandler.handleError(error))
+    );
+  }
+  getTicketsEnclosure(id: any) {
     return this.http.get<any>(`${environment.apiUrl}events/${id}/enclusure`).pipe(catchError(error => this.errorHandler.handleError(error)));
   }
+getRemoteReads(since: string) {
+  return this.http.get<any>(
+    `${environment.apiUrl}historial-lectura/sync?since=${since}`
+  );
+}
+
+
+
+
+
 }
 
 type Check = 0 | 1;
@@ -107,4 +117,9 @@ export interface EventZoneItem {
   "current_stock": number,
   "general_stock": number,
   "online_commission": number
+}
+interface Historial {
+  ticket_id: number;
+  checkin: number;  // 0 o 1
+  updated_at: string;
 }
